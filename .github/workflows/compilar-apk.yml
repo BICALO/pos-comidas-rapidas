@@ -9,6 +9,9 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-24.04  # trae el Android SDK instalado
@@ -60,3 +63,28 @@ jobs:
         with:
           name: POS-Comidas-Rapidas-APK
           path: app-android/POS-Comidas-Rapidas-v1.0.${{ github.run_number }}.apk
+
+      # Publica el APK como "Release": queda un enlace directo de descarga
+      # (Releases > Latest) que se puede abrir desde el celular.
+      - name: Publicar Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v1.0.${{ github.run_number }}" \
+            "POS-Comidas-Rapidas-v1.0.${{ github.run_number }}.apk" \
+            --repo "${{ github.repository }}" \
+            --title "POS Comidas Rápidas v1.0.${{ github.run_number }}" \
+            --notes "APK para instalar en Android. Descarga el archivo .apk de abajo desde el celular e instálalo (permite 'Instalar apps desconocidas'). Se puede instalar encima de una versión anterior sin perder datos." \
+            --latest
+
+      # Copia del APK en la rama 'apk' (respaldo de descarga)
+      - name: Guardar APK en la rama apk
+        run: |
+          mkdir /tmp/rama && cp "POS-Comidas-Rapidas-v1.0.${{ github.run_number }}.apk" /tmp/rama/POS-Comidas-Rapidas.apk
+          cd /tmp/rama
+          git init -q -b apk
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add POS-Comidas-Rapidas.apk
+          git commit -qm "APK v1.0.${{ github.run_number }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" apk
