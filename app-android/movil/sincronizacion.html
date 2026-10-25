@@ -64,7 +64,7 @@
         <button class="secondary" onclick="exportar()">⬇️ Guardar copia en Descargas</button>
         <button class="secondary" onclick="restaurar()">☁️ Restaurar desde la nube</button>
         <button class="secondary" onclick="document.getElementById('archivo').click()">📂 Importar db.json del PC</button>
-        <input id="archivo" type="file" accept=".json,application/json" style="display:none;" onchange="importar(this)">
+        <input id="archivo" type="file" style="display:none;" onchange="importar(this)">
       </div>
       <p class="ayuda">“Importar db.json del PC” reemplaza los datos de este teléfono por los del archivo <code>data/db.json</code> de la versión de computador. Las fotos de productos del PC no viajan en ese archivo: vuelve a subirlas desde Productos.</p>
       <div id="msgRespaldo"></div>

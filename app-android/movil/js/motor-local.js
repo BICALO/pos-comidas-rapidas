@@ -371,7 +371,8 @@
     // Reemplaza toda la base de datos (restaurar desde la nube o importar el
     // db.json del PC). contarComoCambio=false cuando viene de la nube.
     async reemplazarDB(texto, { contarComoCambio = true } = {}) {
-      const data = JSON.parse(texto);
+      let data;
+      try { data = JSON.parse(texto); } catch (e) { throw new Error('Ese archivo no es una base de datos del sistema. Elige el archivo db.json (carpeta data del PC) o un respaldo .json de esta app.'); }
       if (!data || !Array.isArray(data.users) || !Array.isArray(data.products)) {
         throw new Error('El archivo no parece una base de datos del sistema (faltan usuarios o productos).');
       }
