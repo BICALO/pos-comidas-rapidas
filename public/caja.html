@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Caja</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .dif-ok { color:#27ae60; font-weight:bold; }
+  .dif-mal { color:#c0392b; font-weight:bold; }
+  .metodo-card { flex:1; min-width:220px; }
+  .metodo-card h3 { margin:0 0 6px; color:#c0392b; }
+  .metodo-card .fila { display:flex; justify-content:space-between; font-size:13px; padding:2px 0; }
+  .metodo-card input { text-align:right; font-weight:bold; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>🍔 Comidas Rápidas</h1>
+    <nav id="nav"></nav>
+    <div class="userinfo" id="userinfo"></div>
+  </div>
+  <div class="container">
+    <div class="tabs">
+      <button class="active" onclick="mostrar('diario', this)">📅 Cuadre diario</button>
+      <button onclick="mostrar('mensual', this)">🗓️ Resumen mensual</button>
+      <button onclick="mostrar('historial', this)">📜 Historial de arqueos</button>
+    </div>
+
+    <!-- ===================== CUADRE DIARIO ===================== -->
+    <div id="diario" class="card">
+      <div class="flex" style="align-items:flex-end;">
+        <div><label>Fecha a cuadrar</label><input type="date" id="fechaCaja" onchange="cargarDiario()"></div>
+        <div><button class="secondary" onclick="fechaCaja('hoy')">Hoy</button> <button class="secondary" onclick="fechaCaja('ayer')">Ayer</button></div>
+        <div style="flex:1;"></div>
+        <div><button onclick="mostrarFormGastoOcasional()">➕ Gasto ocasional del día</button></div>
+      </div>
+
+      <div id="formGastoOcasional" class="card" style="display:none; background:#fdf2f2; margin-top:12px;">
+        <h3 style="margin-top:0;">Gasto ocasional (se descuenta directo del dinero del día)</h3>
+        <div class="flex">
+          <div><label>Descripción</label><input id="gDescripcion" placeholder="Ej: hielo, domicilio, propina..."></div>
+          <div><label>Monto</label><input id="gMonto" type="number" step="0.01"></div>
+          <div><label>Pagado con</label>
+            <select id="gMetodo">
+              <option>Efectivo</option>
+              <option>Tarjeta</option>
+              <option>Transferencia</option>
+            </select>
+          </div>
+        </div>
+        <br>
+        <button onclick="guardarGastoOcasional()">Guardar gasto</button>
+        <button class="secondary" onclick="document.getElementById('formGastoOcasional').style.display='none';">Cancelar</button>
+        <div id="msgGasto" class="error"></div>
+      </div>
+
+      <h2 style="margin-top:16px;">¿Cuánto debería haber por método de pago?</h2>
+      <div class="flex" id="metodosCaja"></div>
+
+      <div class="total-box" id="totalEsperadoCaja"></div>
+
+      <h2>Arqueo: lo que contaste físicamente</h2>
+      <p style="font-size:12px;color:#666;">Cuenta el dinero real de cada método (el efectivo en caja, lo que muestre el datáfono, etc.) y ponlo aquí para comparar contra lo que el sistema espera.</p>
+      <div class="flex" id="arqueoInputs"></div>
+      <label>Nota (opcional)</label>
+      <input id="notaArqueo" placeholder="Ej: faltó registrar una venta, sobrante por propina...">
+      <br><br>
+      <button onclick="guardarArqueo()">💾 Guardar arqueo del día</button>
+      <div id="msgArqueo" class="ok"></div>
+
+      <h2>Gastos del día</h2>
+      <table>
+        <thead><tr><th>Categoría</th><th>Descripción</th><th>Pagado con</th><th>Monto</th></tr></thead>
+        <tbody id="gastosDelDia"></tbody>
+      </table>
+    </div>
+
+    <!-- ===================== RESUMEN MENSUAL ===================== -->
+    <div id="mensual" class="card" style="display:none;">
+      <div class="flex">
+        <div><label>Año</label><input type="number" id="anioMensual"></div>
+        <div><label>Mes</label>
+          <select id="mesMensual">
+            <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+            <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+            <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+            <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+          </select>
+        </div>
+        <div><button onclick="cargarMensual()">Consultar</button></div>
+      </div>
+
+      <h2>Total del mes por método de pago</h2>
+      <div class="flex" id="metodosMensual"></div>
+      <div class="total-box" id="totalMensualCaja"></div>
+
+      <h2>Detalle día por día</h2>
+      <table>
+        <thead><tr><th>Día</th><th>Efectivo</th><th>Tarjeta</th><th>Transferencia</th><th>Total</th></tr></thead>
+        <tbody id="tablaMensualDias"></tbody>
+      </table>
+    </div>
+
+    <!-- ===================== HISTORIAL DE ARQUEOS ===================== -->
+    <div id="historial" class="card" style="display:none;">
+      <h2>Historial de arqueos</h2>
+      <div class="flex">
+        <div><label>Desde</label><input type="date" id="hDesde" onchange="cargarHistorial()"></div>
+        <div><label>Hasta</label><input type="date" id="hHasta" onchange="cargarHistorial()"></div>
+      </div>
+      <table>
+        <thead><tr><th>Fecha</th><th>Método</th><th>Esperado</th><th>Contado</th><th>Diferencia</th><th>Nota</th></tr></thead>
+        <tbody id="tablaHistorial"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/comun.js"></script>
+  <script>
+    let resumenActual = null;
+
+    function mostrar(id, btn) {
+      ['diario','mensual','historial'].forEach(s => document.getElementById(s).style.display = s === id ? 'block' : 'none');
+      document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (id === 'mensual') cargarMensual();
+      if (id === 'historial') cargarHistorial();
+    }
+
+    function fechaCaja(cual) {
+      const d = new Date();
+      if (cual === 'ayer') d.setDate(d.getDate() - 1);
+      const pad = n => String(n).padStart(2, '0');
+      document.getElementById('fechaCaja').value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+      cargarDiario();
+    }
+
+    function mostrarFormGastoOcasional() {
+      const div = document.getElementById('formGastoOcasional');
+      div.style.display = div.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function guardarGastoOcasional() {
+      document.getElementById('msgGasto').textContent = '';
+      const monto = document.getElementById('gMonto').value;
+      if (!monto) { document.getElementById('msgGasto').textContent = 'Ingresa el monto.'; return; }
+      try {
+        await api('/api/expenses', { method: 'POST', body: JSON.stringify({
+          fecha: document.getElementById('fechaCaja').value,
+          categoria: 'Gasto ocasional',
+          descripcion: document.getElementById('gDescripcion').value,
+          monto,
+          metodo_pago: document.getElementById('gMetodo').value,
+          tipo: 'ocasional'
+        })});
+        document.getElementById('gDescripcion').value = '';
+        document.getElementById('gMonto').value = '';
+        document.getElementById('formGastoOcasional').style.display = 'none';
+        cargarDiario();
+      } catch (e) {
+        document.getElementById('msgGasto').textContent = e.message;
+      }
+    }
+
+    async function cargarDiario() {
+      const fecha = document.getElementById('fechaCaja').value;
+      const r = await api('/api/caja/diario?fecha=' + fecha);
+      resumenActual = r;
+
+      document.getElementById('metodosCaja').innerHTML = r.metodos.map(m => `
+        <div class="card metodo-card">
+          <h3>${iconoMetodo(m.metodo_pago)} ${m.metodo_pago}</h3>
+          <div class="fila"><span>Ventas (${m.numero_ventas})</span><span>${moneda(m.ventas)}</span></div>
+          <div class="fila"><span>− Gastos pagados así</span><span>${moneda(m.gastos)}</span></div>
+          <div class="fila" style="border-top:1px solid #eee; margin-top:4px; padding-top:4px;"><b>Debería haber</b><b>${moneda(m.esperado)}</b></div>
+        </div>`).join('');
+      document.getElementById('totalEsperadoCaja').textContent = `Total esperado del día: ${moneda(r.total_esperado)} (Ventas: ${moneda(r.total_ventas)} − Gastos: ${moneda(r.total_gastos)})`;
+
+      document.getElementById('arqueoInputs').innerHTML = r.metodos.map(m => {
+        const previo = r.arqueo ? r.arqueo.metodos.find(x => x.metodo_pago === m.metodo_pago) : null;
+        return `
+        <div class="card metodo-card">
+          <h3>${iconoMetodo(m.metodo_pago)} ${m.metodo_pago}</h3>
+          <label>Contado</label>
+          <input type="number" step="0.01" class="contado" data-metodo="${m.metodo_pago}" value="${previo ? previo.contado : ''}" placeholder="${m.esperado}">
+          <div id="dif_${m.metodo_pago}" style="margin-top:6px; font-size:13px;"></div>
+        </div>`;
+      }).join('');
+      document.getElementById('notaArqueo').value = r.arqueo ? (r.arqueo.nota || '') : '';
+      document.querySelectorAll('.contado').forEach(inp => {
+        inp.addEventListener('input', actualizarDiferenciasEnVivo);
+      });
+      actualizarDiferenciasEnVivo();
+
+      document.getElementById('gastosDelDia').innerHTML = r.gastos_detalle.map(g => `
+        <tr>
+          <td>${g.categoria}</td>
+          <td>${g.descripcion || '-'} ${g.tipo === 'ocasional' ? '<span class="badge">ocasional</span>' : ''}</td>
+          <td>${g.metodo_pago || 'Efectivo'}</td>
+          <td>${moneda(g.monto)}</td>
+        </tr>`).join('') || '<tr><td colspan="4" style="color:#999;">No hay gastos registrados este día.</td></tr>';
+
+      document.getElementById('msgArqueo').textContent = r.arqueo ? `Último arqueo guardado a las ${new Date(r.arqueo.fecha_registro).toLocaleTimeString('es-CO')}.` : '';
+    }
+
+    function iconoMetodo(m) {
+      return m === 'Efectivo' ? '💵' : (m === 'Tarjeta' ? '💳' : '📱');
+    }
+
+    function actualizarDiferenciasEnVivo() {
+      if (!resumenActual) return;
+      document.querySelectorAll('.contado').forEach(inp => {
+        const metodo = inp.dataset.metodo;
+        const esperado = resumenActual.metodos.find(m => m.metodo_pago === metodo).esperado;
+        const contado = Number(inp.value) || 0;
+        const dif = contado - esperado;
+        const div = document.getElementById('dif_' + metodo);
+        if (inp.value === '') { div.textContent = ''; return; }
+        if (Math.abs(dif) < 0.01) {
+          div.innerHTML = '<span class="dif-ok">✔ Cuadra exacto</span>';
+        } else if (dif > 0) {
+          div.innerHTML = `<span class="dif-mal">Sobran ${moneda(dif)}</span>`;
+        } else {
+          div.innerHTML = `<span class="dif-mal">Faltan ${moneda(-dif)}</span>`;
+        }
+      });
+    }
+
+    async function guardarArqueo() {
+      document.getElementById('msgArqueo').textContent = '';
+      const metodos = [...document.querySelectorAll('.contado')].map(inp => ({
+        metodo_pago: inp.dataset.metodo,
+        contado: inp.value === '' ? 0 : Number(inp.value)
+      }));
+      try {
+        const { arqueo } = await api('/api/arqueos', { method: 'POST', body: JSON.stringify({
+          fecha: document.getElementById('fechaCaja').value,
+          metodos,
+          nota: document.getElementById('notaArqueo').value
+        })});
+        const totalDif = arqueo.metodos.reduce((s, m) => s + m.diferencia, 0);
+        document.getElementById('msgArqueo').className = Math.abs(totalDif) < 0.01 ? 'ok' : 'error';
+        document.getElementById('msgArqueo').textContent = Math.abs(totalDif) < 0.01
+          ? '✔ Arqueo guardado. La caja cuadra exacto.'
+          : `Arqueo guardado. Diferencia total: ${moneda(totalDif)} ${totalDif > 0 ? '(sobrante)' : '(faltante)'}.`;
+      } catch (e) {
+        document.getElementById('msgArqueo').className = 'error';
+        document.getElementById('msgArqueo').textContent = e.message;
+      }
+    }
+
+    // -------- MENSUAL --------
+    async function cargarMensual() {
+      const anio = document.getElementById('anioMensual').value;
+      const mes = document.getElementById('mesMensual').value;
+      const r = await api(`/api/caja/mensual?anio=${anio}&mes=${mes}`);
+      document.getElementById('metodosMensual').innerHTML = r.metodos.map(m => `
+        <div class="card metodo-card">
+          <h3>${iconoMetodo(m.metodo_pago)} ${m.metodo_pago}</h3>
+          <div class="fila"><span>Ventas</span><span>${moneda(m.ventas)}</span></div>
+          <div class="fila"><span>− Gastos</span><span>${moneda(m.gastos)}</span></div>
+          <div class="fila" style="border-top:1px solid #eee; margin-top:4px; padding-top:4px;"><b>Neto</b><b>${moneda(m.esperado)}</b></div>
+        </div>`).join('');
+      document.getElementById('totalMensualCaja').textContent = `Total del mes: ${moneda(r.total_ventas)} en ventas (${r.numero_ventas} ventas) · Gastos: ${moneda(r.total_gastos)} · Neto: ${moneda(r.total_esperado)}`;
+
+      const dias = Object.keys(r.por_dia).sort();
+      document.getElementById('tablaMensualDias').innerHTML = dias.map(d => {
+        const x = r.por_dia[d];
+        return `<tr><td>${d}</td><td>${moneda(x.Efectivo)}</td><td>${moneda(x.Tarjeta)}</td><td>${moneda(x.Transferencia)}</td><td><b>${moneda(x.total)}</b></td></tr>`;
+      }).join('') || '<tr><td colspan="5" style="color:#999;">No hubo ventas este mes.</td></tr>';
+    }
+
+    // -------- HISTORIAL DE ARQUEOS --------
+    async function cargarHistorial() {
+      const desde = document.getElementById('hDesde').value;
+      const hasta = document.getElementById('hHasta').value;
+      const q = [];
+      if (desde) q.push('desde=' + desde);
+      if (hasta) q.push('hasta=' + hasta);
+      const arqueos = await api('/api/arqueos?' + q.join('&'));
+      const filas = [];
+      arqueos.forEach(a => {
+        a.metodos.forEach((m, i) => {
+          filas.push(`
+            <tr>
+              <td>${i === 0 ? a.fecha : ''}</td>
+              <td>${iconoMetodo(m.metodo_pago)} ${m.metodo_pago}</td>
+              <td>${moneda(m.esperado)}</td>
+              <td>${moneda(m.contado)}</td>
+              <td class="${Math.abs(m.diferencia) < 0.01 ? 'dif-ok' : 'dif-mal'}">${moneda(m.diferencia)}</td>
+              <td>${i === 0 ? (a.nota || '') : ''}</td>
+            </tr>`);
+        });
+      });
+      document.getElementById('tablaHistorial').innerHTML = filas.join('') || '<tr><td colspan="6" style="color:#999;">Aún no has guardado ningún arqueo.</td></tr>';
+    }
+
+    (async () => {
+      const user = await protegerPagina('caja.html', ['admin']);
+      if (!user) return;
+      const hoy = new Date();
+      document.getElementById('fechaCaja').value = fechaHoyLocal();
+      document.getElementById('anioMensual').value = hoy.getFullYear();
+      document.getElementById('mesMensual').value = hoy.getMonth() + 1;
+      cargarDiario();
+    })();
+  </script>
+</body>
+</html>

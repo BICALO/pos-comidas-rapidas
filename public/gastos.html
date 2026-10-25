@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Gastos</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <h1>🍔 Comidas Rápidas</h1>
+    <nav id="nav"></nav>
+    <div class="userinfo" id="userinfo"></div>
+  </div>
+  <div class="container">
+    <div class="card">
+      <p style="font-size:13px;color:#666;">
+        Registra aquí tus gastos fijos y variables: arriendo, servicios públicos, nómina,
+        transporte, etc. Estos gastos se descuentan de la ganancia en el reporte de
+        Rentabilidad, y los que marques con un método de pago se descuentan también del
+        dinero esperado en <b>Caja</b> ese día (para el cuadre diario). Para gastos rápidos del
+        día a día, usa mejor el botón "➕ Gasto ocasional" que está en la pantalla de Caja.
+      </p>
+      <h2>Registrar gasto</h2>
+      <div class="flex">
+        <div><label>Fecha</label><input type="date" id="fecha"></div>
+        <div><label>Categoría</label>
+          <select id="categoria">
+            <option>Arriendo</option>
+            <option>Servicios públicos</option>
+            <option>Nómina / empleados</option>
+            <option>Transporte / domicilios</option>
+            <option>Mantenimiento</option>
+            <option>Otro</option>
+          </select>
+        </div>
+        <div><label>Descripción (opcional)</label><input id="descripcion" placeholder="Ej: Recibo de luz agosto"></div>
+        <div><label>Monto</label><input id="monto" type="number" step="0.01"></div>
+        <div><label>Pagado con</label>
+          <select id="metodo_pago">
+            <option>Efectivo</option>
+            <option>Tarjeta</option>
+            <option>Transferencia</option>
+          </select>
+        </div>
+      </div>
+      <br>
+      <button onclick="guardarGasto()">Registrar gasto</button>
+      <div id="msg" class="error"></div>
+    </div>
+
+    <div class="card">
+      <h2>Gastos registrados</h2>
+      <div class="flex">
+        <div><label>Desde</label><input type="date" id="filtroDesde" onchange="cargar()"></div>
+        <div><label>Hasta</label><input type="date" id="filtroHasta" onchange="cargar()"></div>
+      </div>
+      <div class="total-box" id="totalGastos"></div>
+      <table>
+        <thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Pagado con</th><th>Monto</th><th></th></tr></thead>
+        <tbody id="tabla"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/comun.js"></script>
+  <script>
+    async function guardarGasto() {
+      document.getElementById('msg').textContent = '';
+      const monto = document.getElementById('monto').value;
+      const categoria = document.getElementById('categoria').value;
+      if (!monto) { document.getElementById('msg').textContent = 'Ingresa el monto del gasto.'; return; }
+      try {
+        await api('/api/expenses', { method: 'POST', body: JSON.stringify({
+          fecha: document.getElementById('fecha').value || undefined,
+          categoria,
+          descripcion: document.getElementById('descripcion').value,
+          monto,
+          metodo_pago: document.getElementById('metodo_pago').value
+        })});
+        document.getElementById('descripcion').value = '';
+        document.getElementById('monto').value = '';
+        cargar();
+      } catch (e) {
+        document.getElementById('msg').textContent = e.message;
+      }
+    }
+
+    async function eliminarGasto(id) {
+      if (!confirm('¿Eliminar este gasto?')) return;
+      await api('/api/expenses/' + id, { method: 'DELETE' });
+      cargar();
+    }
+
+    async function cargar() {
+      const desde = document.getElementById('filtroDesde').value;
+      const hasta = document.getElementById('filtroHasta').value;
+      const q = [];
+      if (desde) q.push('desde=' + desde);
+      if (hasta) q.push('hasta=' + hasta);
+      const gastos = await api('/api/expenses?' + q.join('&'));
+      const total = gastos.reduce((s, g) => s + g.monto, 0);
+      document.getElementById('totalGastos').textContent = 'Total: ' + moneda(total);
+      document.getElementById('tabla').innerHTML = gastos.map(g => `
+        <tr>
+          <td>${new Date(g.fecha).toLocaleDateString('es-CO')}</td>
+          <td>${g.categoria}</td>
+          <td>${g.descripcion || '-'} ${g.tipo === 'ocasional' ? '<span class="badge">ocasional</span>' : ''}</td>
+          <td>${g.metodo_pago || 'Efectivo'}</td>
+          <td>${moneda(g.monto)}</td>
+          <td><button class="small secondary" onclick="eliminarGasto(${g.id})">Eliminar</button></td>
+        </tr>`).join('') || '<tr><td colspan="6" style="color:#999;">No hay gastos registrados en este rango.</td></tr>';
+    }
+
+    (async () => {
+      const user = await protegerPagina('gastos.html', ['admin']);
+      if (!user) return;
+      document.getElementById('fecha').value = fechaHoyLocal();
+      cargar();
+    })();
+  </script>
+</body>
+</html>

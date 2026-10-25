@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>Cargando...</title></head>
+<body>
+  <script>
+    fetch('/api/session').then(r => r.json()).then(d => {
+      window.location.href = d.user ? 'dashboard.html' : 'login.html';
+    });
+  </script>
+</body>
+</html>

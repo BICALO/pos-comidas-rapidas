@@ -1,0 +1,15 @@
+{
+  "name": "pos-comidas-rapidas",
+  "version": "1.0.0",
+  "description": "Sistema de punto de venta e inventario para negocio de comidas rapidas",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "bcryptjs": "^2.4.3",
+    "multer": "^1.4.5-lts.1"
+  }
+}

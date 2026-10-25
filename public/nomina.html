@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Nómina</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <h1>🍔 Comidas Rápidas</h1>
+    <nav id="nav"></nav>
+    <div class="userinfo" id="userinfo"></div>
+  </div>
+  <div class="container">
+    <div class="card" style="background:#fdf6e3; border-left:4px solid #e67e22;">
+      <p style="font-size:12.5px;color:#7a5c00; margin:0;">
+        ⚠️ Este módulo lleva un control <b>básico e informal</b> de nómina (horas, salario, abonos
+        y liquidación mensual). <b>No calcula</b> seguridad social (EPS/pensión/ARL),
+        parafiscales, prestaciones sociales, recargos nocturnos/festivos ni nómina electrónica
+        DIAN. Si tienes empleados formalmente vinculados, complementa esto con un contador o un
+        software de nómina certificado — esta pantalla es para llevar el control del día a día
+        y que cruce con tu rentabilidad como gasto.
+      </p>
+    </div>
+
+    <div class="tabs">
+      <button class="active" onclick="mostrar('empleados', this)">👤 Empleados</button>
+      <button onclick="mostrar('horas', this)">⏱️ Horas trabajadas</button>
+      <button onclick="mostrar('abonos', this)">💵 Abonos</button>
+      <button onclick="mostrar('liquidacion', this)">📊 Liquidación mensual</button>
+      <button onclick="mostrar('historial', this)">📜 Historial</button>
+    </div>
+
+    <!-- ===================== EMPLEADOS ===================== -->
+    <div id="empleados" class="card">
+      <h2 id="tituloEmp">Agregar empleado</h2>
+      <input type="hidden" id="empId">
+      <div class="flex">
+        <div><label>Nombre</label><input id="empNombre"></div>
+        <div><label>Cargo</label><input id="empCargo" placeholder="Ej: Cajero, Cocinero..."></div>
+        <div><label>Forma de pago</label>
+          <select id="empTipo" onchange="toggleTipoPago()">
+            <option value="mensual">Salario mensual fijo</option>
+            <option value="por_hora">Por hora trabajada</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex">
+        <div id="campoSalario"><label>Salario mensual</label><input id="empSalario" type="number" step="0.01"></div>
+        <div id="campoValorHora" style="display:none;"><label>Valor por hora</label><input id="empValorHora" type="number" step="0.01"></div>
+      </div>
+      <br>
+      <button onclick="guardarEmpleado()">Guardar empleado</button>
+      <button class="secondary" onclick="cancelarEdicionEmp()">Cancelar</button>
+      <div id="msgEmp" class="error"></div>
+
+      <h2 style="margin-top:20px;">Empleados</h2>
+      <table>
+        <thead><tr><th>Nombre</th><th>Cargo</th><th>Forma de pago</th><th>Valor</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tablaEmpleados"></tbody>
+      </table>
+    </div>
+
+    <!-- ===================== HORAS ===================== -->
+    <div id="horas" class="card" style="display:none;">
+      <h2>Registrar horas trabajadas</h2>
+      <div class="flex">
+        <div><label>Empleado</label><select id="hEmpleado"></select></div>
+        <div><label>Fecha</label><input type="date" id="hFecha"></div>
+        <div><label>Horas trabajadas</label><input type="number" step="0.5" id="hHoras"></div>
+        <div><label>Nota (opcional)</label><input id="hNota" placeholder="Ej: turno de la tarde"></div>
+      </div>
+      <br>
+      <button onclick="guardarTurno()">Registrar</button>
+      <div id="msgHoras" class="error"></div>
+
+      <h2 style="margin-top:20px;">Historial de horas</h2>
+      <div class="flex">
+        <div><label>Filtrar por empleado</label><select id="hFiltroEmpleado" onchange="cargarTurnos()"></select></div>
+      </div>
+      <table>
+        <thead><tr><th>Fecha</th><th>Empleado</th><th>Horas</th><th>Nota</th><th></th></tr></thead>
+        <tbody id="tablaTurnos"></tbody>
+      </table>
+    </div>
+
+    <!-- ===================== ABONOS ===================== -->
+    <div id="abonos" class="card" style="display:none;">
+      <h2>Registrar abono / adelanto</h2>
+      <p style="font-size:12px;color:#666;">Un abono se descuenta automáticamente de la caja (queda como gasto) y se resta del saldo a pagar cuando liquides el mes.</p>
+      <div class="flex">
+        <div><label>Empleado</label><select id="aEmpleado"></select></div>
+        <div><label>Fecha</label><input type="date" id="aFecha"></div>
+        <div><label>Monto</label><input type="number" step="0.01" id="aMonto"></div>
+        <div><label>Pagado con</label>
+          <select id="aMetodo"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select>
+        </div>
+        <div><label>Motivo (opcional)</label><input id="aMotivo" placeholder="Ej: adelanto solicitado"></div>
+      </div>
+      <br>
+      <button onclick="guardarAbono()">Registrar abono</button>
+      <div id="msgAbono" class="error"></div>
+
+      <h2 style="margin-top:20px;">Abonos registrados</h2>
+      <table>
+        <thead><tr><th>Fecha</th><th>Empleado</th><th>Monto</th><th>Pagado con</th><th>Motivo</th><th></th></tr></thead>
+        <tbody id="tablaAbonos"></tbody>
+      </table>
+    </div>
+
+    <!-- ===================== LIQUIDACION MENSUAL ===================== -->
+    <div id="liquidacion" class="card" style="display:none;">
+      <h2>Liquidación mensual</h2>
+      <div class="flex">
+        <div><label>Año</label><input type="number" id="lAnio"></div>
+        <div><label>Mes</label>
+          <select id="lMes">
+            <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+            <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+            <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+            <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+          </select>
+        </div>
+        <div><button onclick="cargarLiquidacion()">Consultar</button></div>
+      </div>
+      <div class="total-box" id="totalesNomina"></div>
+      <table>
+        <thead><tr><th>Empleado</th><th>Horas</th><th>Devengado</th><th>Abonado</th><th>Saldo a pagar</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tablaLiquidacion"></tbody>
+      </table>
+    </div>
+
+    <!-- ===================== HISTORIAL ===================== -->
+    <div id="historial" class="card" style="display:none;">
+      <h2>Historial de liquidaciones</h2>
+      <table>
+        <thead><tr><th>Periodo</th><th>Empleado</th><th>Horas</th><th>Devengado</th><th>Abonado</th><th>Pagado</th><th>Fecha de pago</th><th></th></tr></thead>
+        <tbody id="tablaHistorialLiq"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/comun.js"></script>
+  <script>
+    let empleados = [];
+
+    function mostrar(id, btn) {
+      ['empleados','horas','abonos','liquidacion','historial'].forEach(s => document.getElementById(s).style.display = s === id ? 'block' : 'none');
+      document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (id === 'horas') cargarTurnos();
+      if (id === 'abonos') cargarAbonos();
+      if (id === 'liquidacion') cargarLiquidacion();
+      if (id === 'historial') cargarHistorialLiq();
+    }
+
+    function toggleTipoPago() {
+      const porHora = document.getElementById('empTipo').value === 'por_hora';
+      document.getElementById('campoSalario').style.display = porHora ? 'none' : 'block';
+      document.getElementById('campoValorHora').style.display = porHora ? 'block' : 'none';
+    }
+
+    // -------- EMPLEADOS --------
+    async function cargarEmpleados() {
+      empleados = await api('/api/empleados');
+      pintarEmpleados();
+      const opciones = empleados.map(e => `<option value="${e.id}">${e.nombre}</option>`).join('');
+      document.getElementById('hEmpleado').innerHTML = opciones;
+      document.getElementById('hFiltroEmpleado').innerHTML = '<option value="">Todos</option>' + opciones;
+      document.getElementById('aEmpleado').innerHTML = opciones;
+    }
+
+    function pintarEmpleados() {
+      document.getElementById('tablaEmpleados').innerHTML = empleados.map(e => `
+        <tr>
+          <td>${e.nombre}</td>
+          <td>${e.cargo || '-'}</td>
+          <td>${e.tipo_pago === 'por_hora' ? 'Por hora' : 'Mensual fijo'}</td>
+          <td>${e.tipo_pago === 'por_hora' ? moneda(e.valor_hora) + '/hora' : moneda(e.salario_mensual) + '/mes'}</td>
+          <td>${e.activo === false ? 'Inactivo' : 'Activo'}</td>
+          <td>
+            <button class="small" onclick="editarEmpleado(${e.id})">Editar</button>
+            <button class="small secondary" onclick="cambiarEstadoEmpleado(${e.id}, ${e.activo === false})">${e.activo === false ? 'Activar' : 'Desactivar'}</button>
+          </td>
+        </tr>`).join('') || '<tr><td colspan="6" style="color:#999;">Aún no has agregado empleados.</td></tr>';
+    }
+
+    function editarEmpleado(id) {
+      const e = empleados.find(e => e.id === id);
+      document.getElementById('empId').value = e.id;
+      document.getElementById('empNombre').value = e.nombre;
+      document.getElementById('empCargo').value = e.cargo || '';
+      document.getElementById('empTipo').value = e.tipo_pago;
+      document.getElementById('empSalario').value = e.salario_mensual || '';
+      document.getElementById('empValorHora').value = e.valor_hora || '';
+      toggleTipoPago();
+      document.getElementById('tituloEmp').textContent = 'Editar empleado: ' + e.nombre;
+      window.scrollTo(0, 0);
+    }
+
+    function cancelarEdicionEmp() {
+      document.getElementById('empId').value = '';
+      document.getElementById('empNombre').value = '';
+      document.getElementById('empCargo').value = '';
+      document.getElementById('empSalario').value = '';
+      document.getElementById('empValorHora').value = '';
+      document.getElementById('empTipo').value = 'mensual';
+      toggleTipoPago();
+      document.getElementById('tituloEmp').textContent = 'Agregar empleado';
+    }
+
+    async function guardarEmpleado() {
+      document.getElementById('msgEmp').textContent = '';
+      const id = document.getElementById('empId').value;
+      const body = JSON.stringify({
+        nombre: document.getElementById('empNombre').value,
+        cargo: document.getElementById('empCargo').value,
+        tipo_pago: document.getElementById('empTipo').value,
+        salario_mensual: document.getElementById('empSalario').value || 0,
+        valor_hora: document.getElementById('empValorHora').value || 0
+      });
+      try {
+        if (id) await api('/api/empleados/' + id, { method: 'PUT', body });
+        else await api('/api/empleados', { method: 'POST', body });
+        cancelarEdicionEmp();
+        cargarEmpleados();
+      } catch (e) {
+        document.getElementById('msgEmp').textContent = e.message;
+      }
+    }
+
+    async function cambiarEstadoEmpleado(id, activo) {
+      await api('/api/empleados/' + id, { method: 'PUT', body: JSON.stringify({ activo }) });
+      cargarEmpleados();
+    }
+
+    // -------- HORAS --------
+    async function guardarTurno() {
+      document.getElementById('msgHoras').textContent = '';
+      try {
+        await api('/api/turnos', { method: 'POST', body: JSON.stringify({
+          empleado_id: Number(document.getElementById('hEmpleado').value),
+          fecha: document.getElementById('hFecha').value,
+          horas: document.getElementById('hHoras').value,
+          nota: document.getElementById('hNota').value
+        })});
+        document.getElementById('hHoras').value = '';
+        document.getElementById('hNota').value = '';
+        cargarTurnos();
+      } catch (e) {
+        document.getElementById('msgHoras').textContent = e.message;
+      }
+    }
+
+    async function eliminarTurno(id) {
+      if (!confirm('¿Eliminar este registro de horas?')) return;
+      await api('/api/turnos/' + id, { method: 'DELETE' });
+      cargarTurnos();
+    }
+
+    async function cargarTurnos() {
+      const empId = document.getElementById('hFiltroEmpleado').value;
+      const q = empId ? '?empleado_id=' + empId : '';
+      const turnos = await api('/api/turnos' + q);
+      document.getElementById('tablaTurnos').innerHTML = turnos.map(t => {
+        const emp = empleados.find(e => e.id === t.empleado_id);
+        return `<tr>
+          <td>${t.fecha}</td>
+          <td>${emp ? emp.nombre : '(eliminado)'}</td>
+          <td>${t.horas}</td>
+          <td>${t.nota || '-'}</td>
+          <td><button class="small secondary" onclick="eliminarTurno(${t.id})">Eliminar</button></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" style="color:#999;">No hay horas registradas.</td></tr>';
+    }
+
+    // -------- ABONOS --------
+    async function guardarAbono() {
+      document.getElementById('msgAbono').textContent = '';
+      const monto = document.getElementById('aMonto').value;
+      if (!monto) { document.getElementById('msgAbono').textContent = 'Ingresa el monto.'; return; }
+      try {
+        await api('/api/abonos-nomina', { method: 'POST', body: JSON.stringify({
+          empleado_id: Number(document.getElementById('aEmpleado').value),
+          fecha: document.getElementById('aFecha').value,
+          monto,
+          metodo_pago: document.getElementById('aMetodo').value,
+          motivo: document.getElementById('aMotivo').value
+        })});
+        document.getElementById('aMonto').value = '';
+        document.getElementById('aMotivo').value = '';
+        cargarAbonos();
+      } catch (e) {
+        document.getElementById('msgAbono').textContent = e.message;
+      }
+    }
+
+    async function eliminarAbono(id) {
+      if (!confirm('¿Eliminar este abono? También se eliminará el gasto asociado.')) return;
+      await api('/api/abonos-nomina/' + id, { method: 'DELETE' });
+      cargarAbonos();
+    }
+
+    async function cargarAbonos() {
+      const abonos = await api('/api/abonos-nomina');
+      document.getElementById('tablaAbonos').innerHTML = abonos.map(a => {
+        const emp = empleados.find(e => e.id === a.empleado_id);
+        return `<tr>
+          <td>${new Date(a.fecha).toLocaleDateString('es-CO')}</td>
+          <td>${emp ? emp.nombre : '(eliminado)'}</td>
+          <td>${moneda(a.monto)}</td>
+          <td>${a.metodo_pago}</td>
+          <td>${a.motivo || '-'}</td>
+          <td><button class="small secondary" onclick="eliminarAbono(${a.id})">Eliminar</button></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="6" style="color:#999;">No hay abonos registrados.</td></tr>';
+    }
+
+    // -------- LIQUIDACION MENSUAL --------
+    async function cargarLiquidacion() {
+      const anio = document.getElementById('lAnio').value;
+      const mes = document.getElementById('lMes').value;
+      const r = await api(`/api/nomina/mensual?anio=${anio}&mes=${mes}`);
+      document.getElementById('totalesNomina').textContent =
+        `Total del mes: ${r.totales.horas}h trabajadas · Devengado: ${moneda(r.totales.devengado)} · Abonado: ${moneda(r.totales.abonado)} · Saldo a pagar: ${moneda(r.totales.saldo)}`;
+      document.getElementById('tablaLiquidacion').innerHTML = r.empleados.map(e => `
+        <tr>
+          <td>${e.nombre}</td>
+          <td>${e.horas_trabajadas}</td>
+          <td>${moneda(e.devengado)}</td>
+          <td>${moneda(e.total_abonado)}</td>
+          <td><b>${moneda(e.saldo_a_pagar)}</b></td>
+          <td>${e.liquidado ? '<span class="badge admin">liquidado</span>' : '<span class="badge">pendiente</span>'}</td>
+          <td>${e.liquidado ? '' : `<button class="small" onclick="liquidar(${e.empleado_id}, '${anio}', '${mes}', ${e.saldo_a_pagar})">Liquidar</button>`}</td>
+        </tr>`).join('') || '<tr><td colspan="7" style="color:#999;">No hay empleados activos.</td></tr>';
+    }
+
+    async function liquidar(empleadoId, anio, mes, saldo) {
+      let metodo = 'Efectivo';
+      if (saldo > 0) {
+        metodo = prompt(`Vas a liquidar ${moneda(saldo)}. ¿Con qué método de pago? (Efectivo / Tarjeta / Transferencia)`, 'Efectivo');
+        if (metodo === null) return;
+      } else {
+        if (!confirm(`El saldo a pagar es ${moneda(saldo)} (ya cubierto o de más con abonos). ¿Registrar la liquidación de todas formas, sin generar un gasto adicional?`)) return;
+      }
+      try {
+        await api('/api/nomina/liquidar', { method: 'POST', body: JSON.stringify({ empleado_id: empleadoId, anio, mes, metodo_pago: metodo }) });
+        cargarLiquidacion();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    // -------- HISTORIAL --------
+    async function cargarHistorialLiq() {
+      const liquidaciones = await api('/api/nomina/liquidaciones');
+      document.getElementById('tablaHistorialLiq').innerHTML = liquidaciones.map(l => `
+        <tr>
+          <td>${l.mes}/${l.anio}</td>
+          <td>${l.nombre}</td>
+          <td>${l.horas_trabajadas}</td>
+          <td>${moneda(l.devengado)}</td>
+          <td>${moneda(l.total_abonado)}</td>
+          <td>${moneda(l.saldo_pagado)}</td>
+          <td>${new Date(l.fecha_liquidacion).toLocaleString('es-CO')}</td>
+          <td><button class="small secondary" onclick="eliminarLiquidacion(${l.id})">Deshacer</button></td>
+        </tr>`).join('') || '<tr><td colspan="8" style="color:#999;">Aún no has liquidado ningún mes.</td></tr>';
+    }
+
+    async function eliminarLiquidacion(id) {
+      if (!confirm('¿Deshacer esta liquidación? También se eliminará el gasto que generó, y podrás volver a liquidar ese mes.')) return;
+      await api('/api/nomina/liquidaciones/' + id, { method: 'DELETE' });
+      cargarHistorialLiq();
+    }
+
+    (async () => {
+      const user = await protegerPagina('nomina.html', ['admin']);
+      if (!user) return;
+      const hoy = new Date();
+      document.getElementById('hFecha').value = fechaHoyLocal();
+      document.getElementById('aFecha').value = fechaHoyLocal();
+      document.getElementById('lAnio').value = hoy.getFullYear();
+      document.getElementById('lMes').value = hoy.getMonth() + 1;
+      await cargarEmpleados();
+      cargarLiquidacion();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Sincronización</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .estado-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:10px; margin-top:8px; }
+  .estado-grid .dato { background:#f7f3ee; border-radius:8px; padding:10px; }
+  .estado-grid .dato .k { font-size:12px; color:#777; }
+  .estado-grid .dato .v { font-size:16px; font-weight:bold; margin-top:2px; word-break:break-word; }
+  .botones { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .aviso { background:#fff4e5; border:1px solid #f0b46a; border-radius:8px; padding:12px; margin-top:12px; font-size:14px; }
+  .aviso h3 { margin:0 0 6px; color:#b9770e; }
+  .ayuda { font-size:13px; color:#666; margin-top:6px; }
+  .check { display:flex; align-items:center; gap:8px; margin-top:10px; font-weight:bold; font-size:14px; }
+  .check input { width:auto; }
+  button.peligro { background:#8e44ad; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>🍔 Comidas Rápidas</h1>
+    <nav id="nav"></nav>
+    <div class="userinfo" id="userinfo"></div>
+  </div>
+  <div class="container">
+
+    <div class="card">
+      <h2>☁️ Estado de la sincronización</h2>
+      <p class="ayuda">La app guarda todo en este teléfono y funciona sin internet. Cuando hay conexión, envía automáticamente una copia de seguridad al servidor configurado abajo.</p>
+      <div class="estado-grid">
+        <div class="dato"><div class="k">Conexión</div><div class="v" id="eConexion">—</div></div>
+        <div class="dato"><div class="k">Cambios sin enviar</div><div class="v" id="ePendientes">—</div></div>
+        <div class="dato"><div class="k">Último envío</div><div class="v" id="eUltimo">—</div></div>
+        <div class="dato"><div class="k">Último error</div><div class="v" id="eError">—</div></div>
+      </div>
+      <div id="conflicto" class="aviso" style="display:none;"></div>
+      <div class="botones">
+        <button onclick="sincronizarAhora()">🔄 Sincronizar ahora</button>
+      </div>
+      <div id="msgEstado"></div>
+    </div>
+
+    <div class="card">
+      <h2>⚙️ Servidor de respaldo</h2>
+      <label for="url">Dirección del servidor</label>
+      <input id="url" type="url" placeholder="https://mi-servidor-pos.onrender.com" autocomplete="off" autocapitalize="off">
+      <label for="token">Clave de sincronización</label>
+      <input id="token" type="password" placeholder="La misma clave SYNC_TOKEN del servidor" autocomplete="off">
+      <label for="nombre">Nombre de este teléfono</label>
+      <input id="nombre" type="text" placeholder="Celular caja">
+      <label class="check"><input id="activo" type="checkbox" checked> Sincronizar automáticamente</label>
+      <div class="botones">
+        <button onclick="guardar()">💾 Guardar y conectar</button>
+        <button class="secondary" onclick="probarConexion()">🔌 Probar conexión</button>
+      </div>
+      <div id="msgConfig"></div>
+    </div>
+
+    <div class="card">
+      <h2>🗂️ Respaldos</h2>
+      <div class="botones">
+        <button class="secondary" onclick="exportar()">⬇️ Guardar copia en Descargas</button>
+        <button class="secondary" onclick="restaurar()">☁️ Restaurar desde la nube</button>
+        <button class="secondary" onclick="document.getElementById('archivo').click()">📂 Importar db.json del PC</button>
+        <input id="archivo" type="file" accept=".json,application/json" style="display:none;" onchange="importar(this)">
+      </div>
+      <p class="ayuda">“Importar db.json del PC” reemplaza los datos de este teléfono por los del archivo <code>data/db.json</code> de la versión de computador. Las fotos de productos del PC no viajan en ese archivo: vuelve a subirlas desde Productos.</p>
+      <div id="msgRespaldo"></div>
+    </div>
+  </div>
+
+  <script src="js/comun.js"></script>
+  <script>
+    const $ = id => document.getElementById(id);
+    function fecha(iso) { return iso ? new Date(iso).toLocaleString('es-CO') : '—'; }
+    function msg(id, texto, ok) { $(id).innerHTML = texto ? `<div class="${ok ? 'ok' : 'error'}">${texto}</div>` : ''; }
+    function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+    function refrescar() {
+      const c = POSSync.config();
+      const e = POSSync.estado();
+      const n = POSSync.pendientes();
+      $('eConexion').textContent = navigator.onLine ? '🟢 Con internet' : '⚪ Sin internet';
+      $('ePendientes').textContent = (!c.url || !c.activo) ? 'Sin configurar' : (n ? n : '0 (al día)');
+      $('eUltimo').textContent = fecha(e.ultimoEnvio);
+      $('eError').textContent = e.ultimoError || 'Ninguno';
+      const box = $('conflicto');
+      if (e.conflicto) {
+        const nb = e.conflicto;
+        box.style.display = '';
+        box.innerHTML = `<h3>⚠️ La nube ya tiene datos de otro teléfono o instalación</h3>
+          <div>Respaldo en la nube: <b>${esc(nb.nombre_dispositivo || 'sin nombre')}</b>, del ${fecha(nb.fecha)}${nb.resumen ? ` — ${nb.resumen.productos} productos, ${nb.resumen.ventas} ventas` : ''}.</div>
+          <div style="margin-top:6px;">Para no perder información, la app no reemplazó ese respaldo. Elige qué hacer:</div>
+          <div class="botones">
+            <button onclick="restaurar()">☁️ Traer los datos de la nube a este teléfono</button>
+            <button class="peligro" onclick="reemplazarNube()">📤 Reemplazar la nube con los datos de este teléfono</button>
+          </div>`;
+      } else { box.style.display = 'none'; box.innerHTML = ''; }
+    }
+
+    async function sincronizarAhora() {
+      msg('msgEstado', '');
+      const r = await POSSync.sincronizar({ forzar: true });
+      if (r.ok) msg('msgEstado', 'Copia enviada a la nube ✅', true);
+      else if (r.motivo === 'sin_config') msg('msgEstado', 'Primero configura el servidor de respaldo.');
+      else if (r.motivo === 'sin_conexion') msg('msgEstado', 'No hay internet. Los cambios quedan guardados en el teléfono y se enviarán al volver la conexión.');
+      else if (r.motivo === 'conflicto') msg('msgEstado', 'Revisa el aviso de arriba.');
+      else msg('msgEstado', r.error || 'No se pudo sincronizar.');
+      refrescar();
+    }
+
+    async function probarConexion() {
+      msg('msgConfig', 'Probando…', true);
+      const anterior = POSSync.config();
+      POSSync.guardarConfig({ url: $('url').value.trim(), token: $('token').value, nombre: $('nombre').value.trim() || 'Celular caja', activo: anterior.activo });
+      try {
+        const r = await POSSync.probar();
+        msg('msgConfig', r.nube
+          ? `Conexión correcta ✅ — la nube tiene un respaldo del ${fecha(r.nube.fecha)} (${esc(r.nube.nombre_dispositivo || 'sin nombre')}).`
+          : 'Conexión correcta ✅ — la nube todavía está vacía.', true);
+        return r;
+      } catch (e) { msg('msgConfig', e.message); return null; }
+    }
+
+    async function guardar() {
+      if (!$('url').value.trim()) { msg('msgConfig', 'Escribe la dirección del servidor.'); return; }
+      if (!$('token').value) { msg('msgConfig', 'Escribe la clave de sincronización.'); return; }
+      const r = await probarConexion();
+      if (!r) return;
+      POSSync.guardarConfig({ activo: $('activo').checked });
+      const nube = r.nube;
+      // Si la nube tiene datos de otra instalacion, se pregunta antes de enviar nada
+      if (nube && nube.dispositivo_id !== POSSync.idDispositivo()) {
+        POSSync.guardarEstado({ conflicto: nube, ultimoError: null });
+        refrescar();
+        msg('msgConfig', 'Configuración guardada. La nube ya tiene datos: elige arriba qué hacer.', true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      POSSync.guardarEstado({ conflicto: null });
+      if ($('activo').checked) await sincronizarAhora();
+      msg('msgConfig', 'Configuración guardada ✅', true);
+      refrescar();
+    }
+
+    async function restaurar() {
+      if (!confirm('Esto REEMPLAZA todos los datos de este teléfono por el último respaldo de la nube. ¿Continuar?')) return;
+      try {
+        await POSSync.restaurarDesdeNube();
+        alert('Datos restaurados desde la nube. Inicia sesión de nuevo.');
+        location.href = 'login.html';
+      } catch (e) { msg('msgRespaldo', e.message); }
+    }
+
+    async function reemplazarNube() {
+      if (!confirm('Esto REEMPLAZA el respaldo de la nube por los datos de este teléfono (el servidor guarda el anterior en su historial). ¿Continuar?')) return;
+      const r = await POSSync.sincronizar({ reemplazarNube: true });
+      if (r.ok) msg('msgEstado', 'Listo: la nube ahora tiene los datos de este teléfono ✅', true);
+      else msg('msgEstado', r.error || 'No se pudo reemplazar.');
+      refrescar();
+    }
+
+    async function exportar() {
+      try { const ruta = await POSSync.exportarArchivo(); msg('msgRespaldo', 'Copia guardada: ' + esc(ruta), true); }
+      catch (e) { msg('msgRespaldo', 'No se pudo guardar la copia: ' + e.message); }
+    }
+
+    async function importar(input) {
+      const f = input.files[0];
+      input.value = '';
+      if (!f) return;
+      if (!confirm('Esto REEMPLAZA todos los datos de este teléfono por los del archivo "' + f.name + '". ¿Continuar?')) return;
+      try {
+        await POSSync.importarArchivo(await f.text());
+        alert('Datos importados. Inicia sesión con los usuarios del PC.');
+        location.href = 'login.html';
+      } catch (e) { msg('msgRespaldo', e.message); }
+    }
+
+    window.addEventListener('pos-sync-estado', refrescar);
+    window.addEventListener('online', refrescar);
+    window.addEventListener('offline', refrescar);
+
+    (async () => {
+      const user = await protegerPagina('sincronizacion.html', ['admin']);
+      if (!user) return;
+      const c = POSSync.config();
+      $('url').value = c.url;
+      $('token').value = c.token;
+      $('nombre').value = c.nombre;
+      $('activo').checked = c.url ? c.activo : true;
+      refrescar();
+    })();
+  </script>
+</body>
+</html>

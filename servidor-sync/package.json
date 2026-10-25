@@ -1,0 +1,12 @@
+{
+  "name": "pos-servidor-sync",
+  "version": "1.0.0",
+  "description": "Servidor de respaldo en la nube para la app Android del POS de comidas rapidas",
+  "main": "servidor.js",
+  "scripts": {
+    "start": "node servidor.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

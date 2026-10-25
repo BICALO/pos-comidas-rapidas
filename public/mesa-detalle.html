@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Mesa</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .cat-header { grid-column: 1 / -1; margin: 12px 0 4px; color:#c0392b; border-bottom:2px solid #f4d7d2; padding-bottom:4px; font-size:13px; }
+  .metodo-btn { background:#eee; color:#333; }
+  .metodo-btn.active { background:#c0392b; color:white; }
+  .grid.compacta { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 6px; }
+  .prod-card.compacta { padding: 5px 3px; }
+  .prod-card.compacta img, .prod-card.compacta .noimg { height: 32px; margin-bottom: 2px; }
+  .prod-card.compacta .nombre { font-size: 10.5px; line-height: 1.15; margin: 2px 0 1px; }
+  .prod-card.compacta .precio { font-size: 11px; }
+
+  html, body { height: 100%; }
+  .venta-wrap { display:flex; gap:16px; height: calc(100vh - 78px); padding: 12px 16px; max-width:1300px; margin:0 auto; box-sizing:border-box; }
+  .productos-panel { flex:2; min-width:0; overflow-y:auto; background:white; border-radius:10px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,0.1); }
+  .carrito-panel { flex:1; min-width:300px; max-width:400px; background:white; border-radius:10px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,0.1); display:flex; flex-direction:column; overflow:hidden; }
+  .carrito-scroll { flex:1; overflow-y:auto; min-height:60px; }
+  .carrito-fijo { flex-shrink:0; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>🍔 Comidas Rápidas</h1>
+    <nav id="nav"></nav>
+    <div class="userinfo" id="userinfo"></div>
+  </div>
+  <div class="venta-wrap">
+    <div class="productos-panel">
+      <div class="flex" style="align-items:center;">
+        <button class="secondary" onclick="location.href='mesas.html'">⬅ Mesas</button>
+        <h2 id="tituloMesa" style="margin:0;">Mesa</h2>
+      </div>
+      <input id="buscar" placeholder="Buscar producto..." oninput="pintarProductos()" style="margin-top:10px;">
+      <div class="grid compacta" id="grid" style="margin-top:10px;"></div>
+    </div>
+    <div class="carrito-panel">
+      <h2 id="tituloCuenta">Cuenta de la mesa</h2>
+      <div class="carrito-scroll">
+        <table>
+          <thead><tr><th>Item</th><th>Cant.</th><th>Subt.</th></tr></thead>
+          <tbody id="itemsMesa"></tbody>
+        </table>
+      </div>
+      <div class="carrito-fijo">
+        <div class="total-box" id="totalMesa">Total: $0</div>
+        <div id="pagoBox" style="display:none;">
+          <label>Método de pago</label>
+          <div style="display:flex; gap:8px; margin-bottom:10px;">
+            <button type="button" class="metodo-btn active" data-metodo="Efectivo" onclick="elegirMetodo(this)">💵 Efectivo</button>
+            <button type="button" class="metodo-btn" data-metodo="Tarjeta" onclick="elegirMetodo(this)">💳 Tarjeta</button>
+            <button type="button" class="metodo-btn" data-metodo="Transferencia" onclick="elegirMetodo(this)">📱 Transferencia</button>
+          </div>
+          <button style="width:100%;" onclick="confirmarCobro()">✅ Confirmar cobro</button>
+          <button style="width:100%; margin-top:6px;" class="secondary" onclick="document.getElementById('pagoBox').style.display='none';">Cancelar</button>
+        </div>
+        <div id="accionesBox">
+          <button style="width:100%;" onclick="mostrarPago()">💰 Cobrar mesa</button>
+          <br><br>
+          <button style="width:100%;" class="secondary" onclick="cancelarCuenta()">❌ Cancelar cuenta (sin cobrar)</button>
+        </div>
+        <div id="msg" class="error"></div>
+        <div id="ok" class="ok"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/comun.js"></script>
+  <script>
+    const mesaId = Number(new URLSearchParams(window.location.search).get('id'));
+    let productos = [];
+    let cuentaActual = { items: [] };
+    let metodoPago = 'Efectivo';
+
+    function elegirMetodo(btn) {
+      document.querySelectorAll('.metodo-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      metodoPago = btn.dataset.metodo;
+    }
+
+    function mostrarPago() {
+      if (!cuentaActual.items.length) { document.getElementById('msg').textContent = 'La mesa no tiene items todavía.'; return; }
+      document.getElementById('msg').textContent = '';
+      document.getElementById('pagoBox').style.display = 'block';
+      document.getElementById('accionesBox').style.display = 'none';
+    }
+
+    async function cargarProductos() {
+      productos = await api('/api/products');
+      pintarProductos();
+    }
+
+    function pintarProductos() {
+      const q = document.getElementById('buscar').value.toLowerCase();
+      const grid = document.getElementById('grid');
+      const filtrados = productos.filter(p => p.nombre.toLowerCase().includes(q));
+      const porCategoria = {};
+      filtrados.forEach(p => {
+        const cat = p.categoria || 'General';
+        if (!porCategoria[cat]) porCategoria[cat] = [];
+        porCategoria[cat].push(p);
+      });
+      const categorias = Object.keys(porCategoria).sort();
+      if (!categorias.length) { grid.innerHTML = '<p style="color:#999;">No hay productos.</p>'; return; }
+      grid.innerHTML = categorias.map(cat => `
+        <h3 class="cat-header">${cat}</h3>
+        ${porCategoria[cat].sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(p => `
+          <div class="prod-card compacta" onclick="agregarItem(${p.id})">
+            ${p.foto ? `<img src="${p.foto}">` : `<div class="noimg">Sin foto</div>`}
+            <div class="nombre">${p.nombre} ${p.promo_activa ? '🏷️' : ''}</div>
+            <div class="precio">${moneda(p.precio_actual)}</div>
+          </div>`).join('')}
+      `).join('');
+    }
+
+    async function cargarCuenta() {
+      const r = await api('/api/mesas/' + mesaId + '/cuenta');
+      document.getElementById('tituloMesa').textContent = '🍽️ ' + r.mesa.nombre;
+      document.getElementById('tituloCuenta').textContent = 'Cuenta de ' + r.mesa.nombre;
+      cuentaActual = r.cuenta;
+      pintarCuenta();
+    }
+
+    function pintarCuenta() {
+      const items = cuentaActual.items || [];
+      document.getElementById('itemsMesa').innerHTML = items.map(it => `
+        <tr>
+          <td>${it.nombre_producto}</td>
+          <td>
+            <button class="small secondary" onclick="cambiarCantidad(${it.id}, ${it.cantidad - 1})">-</button>
+            ${it.cantidad}
+            <button class="small secondary" onclick="cambiarCantidad(${it.id}, ${it.cantidad + 1})">+</button>
+          </td>
+          <td>${moneda(it.subtotal)}</td>
+        </tr>`).join('') || '<tr><td colspan="3" style="color:#999;">Toca un producto para agregarlo a esta mesa.</td></tr>';
+      const total = items.reduce((s, it) => s + it.subtotal, 0);
+      document.getElementById('totalMesa').textContent = 'Total: ' + moneda(total);
+    }
+
+    async function agregarItem(productId) {
+      document.getElementById('msg').textContent = '';
+      try {
+        await api('/api/mesas/' + mesaId + '/items', { method: 'POST', body: JSON.stringify({ product_id: productId, cantidad: 1 }) });
+        cargarCuenta();
+      } catch (e) {
+        document.getElementById('msg').textContent = e.message;
+      }
+    }
+
+    async function cambiarCantidad(itemId, nuevaCantidad) {
+      document.getElementById('msg').textContent = '';
+      try {
+        if (nuevaCantidad <= 0) {
+          await api('/api/mesas/' + mesaId + '/items/' + itemId, { method: 'DELETE' });
+        } else {
+          await api('/api/mesas/' + mesaId + '/items/' + itemId, { method: 'PUT', body: JSON.stringify({ cantidad: nuevaCantidad }) });
+        }
+        cargarCuenta();
+      } catch (e) {
+        document.getElementById('msg').textContent = e.message;
+      }
+    }
+
+    async function cancelarCuenta() {
+      if (!cuentaActual.items.length) { location.href = 'mesas.html'; return; }
+      if (!confirm('¿Cancelar esta cuenta sin cobrar? Se perderán los items pedidos (no se descuenta inventario ni se registra venta).')) return;
+      await api('/api/mesas/' + mesaId + '/cuenta', { method: 'DELETE' });
+      location.href = 'mesas.html';
+    }
+
+    async function confirmarCobro() {
+      document.getElementById('msg').textContent = '';
+      try {
+        const { venta } = await api('/api/mesas/' + mesaId + '/cobrar', { method: 'POST', body: JSON.stringify({ metodo_pago: metodoPago }) });
+        imprimirComprobante(venta);
+        document.getElementById('ok').textContent = `Mesa cobrada por ${moneda(venta.total)}.`;
+        setTimeout(() => location.href = 'mesas.html', 600);
+      } catch (e) {
+        document.getElementById('msg').textContent = e.message;
+      }
+    }
+
+    function imprimirComprobante(venta) {
+      const w = window.open('', '_blank', 'width=380,height=600');
+      const fecha = new Date(venta.fecha).toLocaleString('es-CO');
+      const filas = venta.items.map(it => `
+        <tr><td>${it.nombre_producto}</td><td style="text-align:center;">${it.cantidad}</td><td style="text-align:right;">${moneda(it.subtotal)}</td></tr>`).join('');
+      w.document.write(`
+        <html><head><title>Comprobante #${venta.id}</title>
+        <style>
+          body { font-family: monospace; width: 280px; margin: 0 auto; font-size: 13px; }
+          h2 { text-align: center; margin: 6px 0; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+          td { padding: 2px 0; }
+          hr { border: none; border-top: 1px dashed #333; }
+          .total { font-weight: bold; font-size: 16px; text-align: right; margin-top: 6px; }
+          .center { text-align: center; }
+        </style>
+        </head><body>
+          <h2>🍔 Comidas Rápidas</h2>
+          <div class="center">Comprobante de venta #${venta.id}</div>
+          <div class="center">${fecha}</div>
+          <div class="center"><b>${venta.mesa_nombre || ''}</b></div>
+          <div>Atendió: ${venta.usuario_nombre}</div>
+          <hr>
+          <table>
+            <tr><td><b>Producto</b></td><td class="center"><b>Cant</b></td><td style="text-align:right;"><b>Subt.</b></td></tr>
+            ${filas}
+          </table>
+          <hr>
+          <div class="total">TOTAL: ${moneda(venta.total)}</div>
+          <div>Pago: ${venta.metodo_pago}</div>
+          <hr>
+          <div class="center">¡Gracias por su visita!</div>
+        </body></html>
+      `);
+      w.document.close();
+      w.focus();
+      setTimeout(() => w.print(), 300);
+    }
+
+    (async () => {
+      const user = await protegerPagina('mesas.html', ['admin', 'vendedor']);
+      if (!user) return;
+      if (!mesaId) { location.href = 'mesas.html'; return; }
+      await cargarProductos();
+      await cargarCuenta();
+    })();
+  </script>
+</body>
+</html>

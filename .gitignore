@@ -1,0 +1,7 @@
+node_modules/
+
+# App Android (se generan al construir)
+app-android/www/
+app-android/android/
+# Respaldos recibidos por el servidor de sincronizacion
+servidor-sync/datos/

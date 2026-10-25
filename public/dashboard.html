@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Inicio</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <h1>🍔 Comidas Rápidas</h1>
+    <nav id="nav"></nav>
+    <div class="userinfo" id="userinfo"></div>
+  </div>
+  <div class="container">
+    <div class="card">
+      <h2>Resumen del día de hoy</h2>
+      <div class="flex">
+        <div class="card" style="text-align:center;">
+          <div style="font-size:13px;color:#888;">Ventas de hoy</div>
+          <div style="font-size:28px;font-weight:bold;color:#c0392b;" id="totalHoy">--</div>
+        </div>
+        <div class="card" style="text-align:center;">
+          <div style="font-size:13px;color:#888;">Número de ventas</div>
+          <div style="font-size:28px;font-weight:bold;color:#c0392b;" id="numHoy">--</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Accesos rápidos</h2>
+      <div class="flex" id="accesos"></div>
+    </div>
+  </div>
+
+  <script src="js/comun.js"></script>
+  <script>
+    (async () => {
+      const user = await protegerPagina('dashboard.html', ['admin', 'vendedor']);
+      if (!user) return;
+
+      const accesos = [
+        { href: 'ventas.html', txt: '🧾 Registrar venta', roles: ['admin','vendedor'] },
+        { href: 'mesas.html', txt: '🍽️ Mesas', roles: ['admin','vendedor'] },
+        { href: 'productos.html', txt: '📦 Productos', roles: ['admin'] },
+        { href: 'inventario.html', txt: '📥 Facturas / Bajas', roles: ['admin'] },
+        { href: 'reportes.html', txt: '📊 Reportes', roles: ['admin'] },
+        { href: 'usuarios.html', txt: '👤 Usuarios', roles: ['admin'] }
+      ];
+      document.getElementById('accesos').innerHTML = accesos
+        .filter(a => a.roles.includes(user.rol))
+        .map(a => `<div class="card" style="cursor:pointer;text-align:center;" onclick="location.href='${a.href}'"><h3>${a.txt}</h3></div>`)
+        .join('');
+
+      try {
+        const hoy = fechaHoyLocal();
+        const rep = await api('/api/reports/diario?fecha=' + hoy);
+        document.getElementById('totalHoy').textContent = moneda(rep.total_ventas);
+        document.getElementById('numHoy').textContent = rep.numero_ventas;
+      } catch (e) {}
+    })();
+  </script>
+</body>
+</html>

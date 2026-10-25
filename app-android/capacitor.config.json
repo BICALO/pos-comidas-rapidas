@@ -1,0 +1,12 @@
+{
+  "appId": "com.comidasrapidas.pos",
+  "appName": "POS Comidas Rápidas",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Productos</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <h1>🍔 Comidas Rápidas</h1>
+    <nav id="nav"></nav>
+    <div class="userinfo" id="userinfo"></div>
+  </div>
+  <div class="container">
+    <div class="card">
+      <h2 id="tituloForm">Agregar producto</h2>
+      <div id="infoActual" style="display:none; background:#f7f3ee; border-left:4px solid #c0392b; padding:8px 12px; margin-bottom:10px; font-size:13px;"></div>
+      <form id="formProducto" onsubmit="return guardarProducto(event)">
+        <input type="hidden" id="editId">
+        <div class="flex">
+          <div>
+            <label>Nombre</label>
+            <input id="nombre" required>
+            <label>Categoría</label>
+            <input id="categoria" placeholder="Ej: Hamburguesas, Bebidas...">
+          </div>
+          <div>
+            <label>Precio de venta</label>
+            <input id="precio_venta" type="number" step="0.01" required oninput="recalcularReceta(); recalcularCombo();">
+            <label>Costo manual (se ignora si usas receta)</label>
+            <input id="costo" type="number" step="0.01">
+          </div>
+          <div>
+            <label>Stock manual (se ignora si usas receta)</label>
+            <input id="stock" type="number" step="0.01">
+            <label>Foto del producto</label>
+            <input id="foto" type="file" accept="image/*">
+          </div>
+        </div>
+
+        <hr>
+        <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+          <input type="checkbox" id="usarReceta" style="width:auto;" onchange="toggleReceta()">
+          Este producto se prepara con una receta de insumos (ej: hamburguesa = pan + carne + lechuga...)
+        </label>
+        <div id="bloqueReceta" style="display:none; margin-top:10px;">
+          <p style="font-size:12px;color:#666;">
+            El costo y el stock disponible de este producto se calculan automáticamente a partir
+            de tus insumos, y se actualizan solos cuando registres facturas de esos insumos.
+            Aquí abajo ves el cálculo <b>en vivo</b>, mientras armas la receta.
+          </p>
+          <table>
+            <thead><tr><th>Insumo</th><th>Cantidad por unidad vendida</th><th>Costo por unidad de uso</th><th>Subtotal</th><th></th></tr></thead>
+            <tbody id="filasReceta"></tbody>
+          </table>
+          <button type="button" class="small secondary" onclick="agregarFilaReceta()">+ Agregar insumo</button>
+          <div id="resumenReceta" style="margin-top:10px; background:#f7f3ee; border-radius:8px; padding:10px 14px; font-size:13px;"></div>
+        </div>
+
+        <hr>
+        <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+          <input type="checkbox" id="usarCombo" style="width:auto;" onchange="toggleCombo()">
+          Este producto es un combo armado con otros productos (ej: Combo Familiar = hamburguesa + papas + gaseosa)
+        </label>
+        <div id="bloqueCombo" style="display:none; margin-top:10px;">
+          <p style="font-size:12px;color:#666;">
+            Elige qué productos incluye el combo y cuántos de cada uno. Pon el "Precio de venta"
+            de arriba en el valor llamativo del combo (normalmente menor que la suma de precios
+            individuales) — abajo verás cuánto se está ahorrando el cliente, en vivo.
+          </p>
+          <table>
+            <thead><tr><th>Producto</th><th>Cantidad</th><th>Precio normal (subt.)</th><th>Costo (subt.)</th><th></th></tr></thead>
+            <tbody id="filasCombo"></tbody>
+          </table>
+          <button type="button" class="small secondary" onclick="agregarFilaCombo()">+ Agregar producto</button>
+          <div id="resumenCombo" style="margin-top:10px; background:#f7f3ee; border-radius:8px; padding:10px 14px; font-size:13px;"></div>
+        </div>
+
+        <br><br>
+        <button type="submit" id="btnGuardar">Guardar producto</button>
+        <button type="button" class="secondary" onclick="cancelarEdicion()">Cancelar</button>
+        <div id="msg" class="error"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Productos existentes</h2>
+      <div class="grid" id="grid"></div>
+    </div>
+  </div>
+
+  <script src="js/comun.js"></script>
+  <script>
+    let productos = [];
+    let insumos = [];
+
+    async function cargar() {
+      [productos, insumos] = await Promise.all([api('/api/products'), api('/api/insumos')]);
+      pintar();
+    }
+
+    function pintar() {
+      document.getElementById('grid').innerHTML = productos.map(p => `
+        <div class="prod-card">
+          ${p.foto ? `<img src="${p.foto}">` : `<div class="noimg">Sin foto</div>`}
+          <div class="nombre">${p.nombre}
+            ${p.tiene_receta ? '<span class="badge">receta</span>' : ''}
+            ${p.tiene_combo ? '<span class="badge" style="background:#d6eaf8;">combo</span>' : ''}
+            ${p.promo_activa ? '<span class="badge" style="background:#fadbd8;">🏷️ promo</span>' : ''}
+          </div>
+          <div class="precio">
+            ${p.promo_activa ? `<span style="text-decoration:line-through;color:#999;font-size:11px;">${moneda(p.precio_venta)}</span> ${moneda(p.precio_actual)}` : moneda(p.precio_venta)}
+          </div>
+          <div style="font-size:11px;color:#999;">Costo: ${moneda(p.costo)} · Stock: ${p.stock}</div>
+          <div style="margin-top:6px;">
+            <button class="small" onclick="editar(${p.id})">Editar</button>
+            <button class="small secondary" onclick="eliminar(${p.id})">Eliminar</button>
+          </div>
+        </div>`).join('') || '<p style="color:#999;">Aún no has agregado productos.</p>';
+    }
+
+    function opcionesInsumos() {
+      return insumos.map(i => `<option value="${i.id}">${i.nombre} (por ${i.unidad_uso || i.unidad})</option>`).join('');
+    }
+
+    function costoPorUso(ins) {
+      if (!ins) return 0;
+      const equiv = Number(ins.equivalencia) > 0 ? Number(ins.equivalencia) : 1;
+      return (Number(ins.costo) || 0) * equiv;
+    }
+
+    function disponibleFila(ins, cantidad) {
+      if (!ins || !cantidad) return 0;
+      const equiv = Number(ins.equivalencia) > 0 ? Number(ins.equivalencia) : 1;
+      const stockEnUnidadUso = (Number(ins.stock) || 0) / equiv;
+      return Math.floor(stockEnUnidadUso / cantidad);
+    }
+
+    function agregarFilaReceta(insumo_id, cantidad) {
+      const tbody = document.getElementById('filasReceta');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><select class="ins" onchange="actualizarUnidadFila(this); recalcularReceta();">${opcionesInsumos()}</select></td>
+        <td><input class="cant" type="number" step="0.01" value="${cantidad || 1}" oninput="recalcularReceta()"> <span class="unidad-label" style="font-size:12px;color:#888;"></span></td>
+        <td class="costo-fila" style="font-size:13px;color:#555;"></td>
+        <td class="subtotal-fila" style="font-size:13px;font-weight:bold;color:#c0392b;"></td>
+        <td><button type="button" class="small secondary" onclick="this.closest('tr').remove(); recalcularReceta();">Quitar</button></td>`;
+      tbody.appendChild(tr);
+      if (insumo_id) tr.querySelector('.ins').value = insumo_id;
+      actualizarUnidadFila(tr.querySelector('.ins'));
+      recalcularReceta();
+    }
+
+    function actualizarUnidadFila(select) {
+      const ins = insumos.find(i => i.id === Number(select.value));
+      const span = select.closest('tr').querySelector('.unidad-label');
+      if (span) span.textContent = ins ? (ins.unidad_uso || ins.unidad) : '';
+    }
+
+    // Calcula y muestra EN VIVO, mientras se arma la receta: el costo de cada
+    // insumo usado, el costo total del producto, la ganancia por unidad y el
+    // stock disponible estimado según lo que hay hoy en insumos.
+    function recalcularReceta() {
+      const filas = [...document.querySelectorAll('#filasReceta tr')];
+      let costoTotal = 0;
+      let disponibleTotal = Infinity;
+      filas.forEach(tr => {
+        const ins = insumos.find(i => i.id === Number(tr.querySelector('.ins').value));
+        const cantidad = Number(tr.querySelector('.cant').value) || 0;
+        const costoUso = costoPorUso(ins);
+        const subtotal = costoUso * cantidad;
+        costoTotal += subtotal;
+        const disp = disponibleFila(ins, cantidad);
+        disponibleTotal = Math.min(disponibleTotal, disp);
+        tr.querySelector('.costo-fila').textContent = ins ? `${moneda(costoUso)} / ${ins.unidad_uso || ins.unidad}` : '-';
+        tr.querySelector('.subtotal-fila').textContent = moneda(subtotal);
+      });
+      if (disponibleTotal === Infinity) disponibleTotal = 0;
+
+      const precioVenta = Number(document.getElementById('precio_venta').value) || 0;
+      const ganancia = precioVenta - costoTotal;
+      const margen = precioVenta > 0 ? (ganancia / precioVenta) * 100 : 0;
+
+      document.getElementById('resumenReceta').innerHTML = `
+        <div class="flex">
+          <div><b>Costo total del producto:</b> ${moneda(costoTotal)}</div>
+          <div><b>Precio de venta:</b> ${moneda(precioVenta)}</div>
+          <div><b>Ganancia por unidad:</b> ${moneda(ganancia)} (${margen.toFixed(1)}%)</div>
+          <div><b>Stock disponible hoy (según insumos):</b> ${disponibleTotal} unidades</div>
+        </div>`;
+    }
+
+    function toggleReceta() {
+      const usa = document.getElementById('usarReceta').checked;
+      document.getElementById('bloqueReceta').style.display = usa ? 'block' : 'none';
+      document.getElementById('costo').disabled = usa;
+      document.getElementById('stock').disabled = usa;
+      if (usa) {
+        document.getElementById('usarCombo').checked = false;
+        document.getElementById('bloqueCombo').style.display = 'none';
+        document.getElementById('filasCombo').innerHTML = '';
+        if (!document.getElementById('filasReceta').children.length) agregarFilaReceta();
+        recalcularReceta();
+      }
+    }
+
+    // -------- COMBOS --------
+    function opcionesProductosParaCombo() {
+      const idActual = Number(document.getElementById('editId').value) || null;
+      // Un combo no puede incluirse a si mismo ni incluir otro combo (evita anidamientos raros)
+      return productos.filter(p => p.id !== idActual && !p.tiene_combo)
+        .map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+    }
+
+    function agregarFilaCombo(product_id, cantidad) {
+      const tbody = document.getElementById('filasCombo');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><select class="cprod" onchange="recalcularCombo()">${opcionesProductosParaCombo()}</select></td>
+        <td><input class="ccant" type="number" step="1" min="1" value="${cantidad || 1}" oninput="recalcularCombo()"></td>
+        <td class="cprecio-fila" style="font-size:13px;color:#555;"></td>
+        <td class="ccosto-fila" style="font-size:13px;color:#555;"></td>
+        <td><button type="button" class="small secondary" onclick="this.closest('tr').remove(); recalcularCombo();">Quitar</button></td>`;
+      tbody.appendChild(tr);
+      if (product_id) tr.querySelector('.cprod').value = product_id;
+      recalcularCombo();
+    }
+
+    function toggleCombo() {
+      const usa = document.getElementById('usarCombo').checked;
+      document.getElementById('bloqueCombo').style.display = usa ? 'block' : 'none';
+      document.getElementById('costo').disabled = usa || document.getElementById('usarReceta').checked;
+      document.getElementById('stock').disabled = usa || document.getElementById('usarReceta').checked;
+      if (usa) {
+        document.getElementById('usarReceta').checked = false;
+        document.getElementById('bloqueReceta').style.display = 'none';
+        document.getElementById('filasReceta').innerHTML = '';
+        if (!document.getElementById('filasCombo').children.length) agregarFilaCombo();
+        recalcularCombo();
+      }
+    }
+
+    // Calcula EN VIVO cuanto cuesta armar el combo, cuanto costaria comprar
+    // los productos por separado, y cuanto se esta ahorrando el cliente.
+    function recalcularCombo() {
+      const filas = [...document.querySelectorAll('#filasCombo tr')];
+      let precioNormalTotal = 0;
+      let costoTotal = 0;
+      filas.forEach(tr => {
+        const prod = productos.find(p => p.id === Number(tr.querySelector('.cprod').value));
+        const cantidad = Number(tr.querySelector('.ccant').value) || 0;
+        const precioSubtotal = prod ? prod.precio_venta * cantidad : 0;
+        const costoSubtotal = prod ? prod.costo * cantidad : 0;
+        precioNormalTotal += precioSubtotal;
+        costoTotal += costoSubtotal;
+        tr.querySelector('.cprecio-fila').textContent = moneda(precioSubtotal);
+        tr.querySelector('.ccosto-fila').textContent = moneda(costoSubtotal);
+      });
+
+      const precioCombo = Number(document.getElementById('precio_venta').value) || 0;
+      const ahorro = precioNormalTotal - precioCombo;
+      const ahorroPct = precioNormalTotal > 0 ? (ahorro / precioNormalTotal) * 100 : 0;
+      const ganancia = precioCombo - costoTotal;
+      const margen = precioCombo > 0 ? (ganancia / precioCombo) * 100 : 0;
+
+      document.getElementById('resumenCombo').innerHTML = `
+        <div class="flex">
+          <div><b>Suma de precios por separado:</b> ${moneda(precioNormalTotal)}</div>
+          <div><b>Precio del combo:</b> ${moneda(precioCombo)}</div>
+          <div><b>Ahorro para el cliente:</b> ${moneda(ahorro)} (${ahorroPct.toFixed(1)}%)</div>
+        </div>
+        <div class="flex" style="margin-top:6px;">
+          <div><b>Costo total del combo:</b> ${moneda(costoTotal)}</div>
+          <div><b>Ganancia por combo:</b> ${moneda(ganancia)} (${margen.toFixed(1)}%)</div>
+        </div>`;
+    }
+
+    function editar(id) {
+      const p = productos.find(p => p.id === id);
+      document.getElementById('editId').value = p.id;
+      document.getElementById('nombre').value = p.nombre;
+      document.getElementById('categoria').value = p.categoria;
+      document.getElementById('precio_venta').value = p.precio_venta;
+      document.getElementById('costo').value = (p.tiene_receta || p.tiene_combo) ? p.costo_manual : p.costo;
+      document.getElementById('stock').value = (p.tiene_receta || p.tiene_combo) ? p.stock_manual : p.stock;
+      document.getElementById('filasReceta').innerHTML = '';
+      document.getElementById('filasCombo').innerHTML = '';
+      document.getElementById('usarReceta').checked = !!p.tiene_receta;
+      document.getElementById('usarCombo').checked = !!p.tiene_combo;
+      document.getElementById('bloqueReceta').style.display = p.tiene_receta ? 'block' : 'none';
+      document.getElementById('bloqueCombo').style.display = p.tiene_combo ? 'block' : 'none';
+      document.getElementById('costo').disabled = p.tiene_receta || p.tiene_combo;
+      document.getElementById('stock').disabled = p.tiene_receta || p.tiene_combo;
+      if (p.tiene_receta) p.receta.forEach(r => agregarFilaReceta(r.insumo_id, r.cantidad));
+      if (p.tiene_combo) p.combo.forEach(c => agregarFilaCombo(c.product_id, c.cantidad));
+      document.getElementById('infoActual').style.display = 'block';
+      document.getElementById('infoActual').innerHTML =
+        `Editando <b>${p.nombre}</b> — Costo actual: <b>${moneda(p.costo)}</b> ·
+         Stock actual: <b>${p.stock}</b> ${(p.tiene_receta || p.tiene_combo) ? '(calculado automáticamente)' : ''}`;
+      document.getElementById('tituloForm').textContent = 'Editar producto: ' + p.nombre;
+      document.getElementById('btnGuardar').textContent = 'Guardar cambios';
+      recalcularReceta();
+      recalcularCombo();
+      window.scrollTo(0,0);
+    }
+
+    function cancelarEdicion() {
+      document.getElementById('formProducto').reset();
+      document.getElementById('editId').value = '';
+      document.getElementById('filasReceta').innerHTML = '';
+      document.getElementById('filasCombo').innerHTML = '';
+      document.getElementById('bloqueReceta').style.display = 'none';
+      document.getElementById('bloqueCombo').style.display = 'none';
+      document.getElementById('costo').disabled = false;
+      document.getElementById('stock').disabled = false;
+      document.getElementById('infoActual').style.display = 'none';
+      document.getElementById('resumenReceta').innerHTML = '';
+      document.getElementById('resumenCombo').innerHTML = '';
+      document.getElementById('tituloForm').textContent = 'Agregar producto';
+      document.getElementById('btnGuardar').textContent = 'Guardar producto';
+    }
+
+    async function eliminar(id) {
+      if (!confirm('¿Eliminar este producto?')) return;
+      await api('/api/products/' + id, { method: 'DELETE' });
+      cargar();
+    }
+
+    async function guardarProducto(ev) {
+      ev.preventDefault();
+      document.getElementById('msg').textContent = '';
+      const id = document.getElementById('editId').value;
+      const fd = new FormData();
+      fd.append('nombre', document.getElementById('nombre').value);
+      fd.append('categoria', document.getElementById('categoria').value);
+      fd.append('precio_venta', document.getElementById('precio_venta').value);
+      fd.append('costo', document.getElementById('costo').value || 0);
+      fd.append('stock', document.getElementById('stock').value || 0);
+      const fotoInput = document.getElementById('foto');
+      if (fotoInput.files[0]) fd.append('foto', fotoInput.files[0]);
+
+      if (document.getElementById('usarReceta').checked) {
+        const filas = [...document.querySelectorAll('#filasReceta tr')];
+        const receta = filas.map(tr => ({
+          insumo_id: Number(tr.querySelector('.ins').value),
+          cantidad: Number(tr.querySelector('.cant').value)
+        }));
+        if (!receta.length) { document.getElementById('msg').textContent = 'Agrega al menos un insumo a la receta, o desmarca la casilla de receta.'; return false; }
+        fd.append('receta', JSON.stringify(receta));
+      } else if (id) {
+        fd.append('receta', ''); // limpia la receta si se desmarcó al editar
+      }
+
+      if (document.getElementById('usarCombo').checked) {
+        const filas = [...document.querySelectorAll('#filasCombo tr')];
+        const combo = filas.map(tr => ({
+          product_id: Number(tr.querySelector('.cprod').value),
+          cantidad: Number(tr.querySelector('.ccant').value)
+        }));
+        if (!combo.length) { document.getElementById('msg').textContent = 'Agrega al menos un producto al combo, o desmarca la casilla de combo.'; return false; }
+        fd.append('combo', JSON.stringify(combo));
+      } else if (id) {
+        fd.append('combo', ''); // limpia el combo si se desmarcó al editar
+      }
+
+      try {
+        if (id) await api('/api/products/' + id, { method: 'PUT', body: fd });
+        else await api('/api/products', { method: 'POST', body: fd });
+        cancelarEdicion();
+        cargar();
+      } catch (e) {
+        document.getElementById('msg').textContent = e.message;
+      }
+      return false;
+    }
+
+    (async () => {
+      const user = await protegerPagina('productos.html', ['admin']);
+      if (!user) return;
+      cargar();
+    })();
+  </script>
+</body>
+</html>

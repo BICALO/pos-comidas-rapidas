@@ -1,0 +1,58 @@
+/* movil.css - Ajustes para pantallas de celular/tablet (se carga despues de style.css) */
+html { -webkit-text-size-adjust: 100%; }
+body { padding-bottom: env(safe-area-inset-bottom); overflow-x: hidden; }
+.topbar { padding-top: max(10px, env(safe-area-inset-top)); }
+
+/* Indicador de sincronizacion en la barra superior */
+.sync-ind {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; padding: 4px 10px; border-radius: 12px;
+  background: rgba(255,255,255,0.18); color: #fff; cursor: pointer; white-space: nowrap;
+  border: none; font-family: inherit;
+}
+.sync-ind::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #bbb; }
+.sync-ind.ok::before { background: #2ecc71; }
+.sync-ind.pendiente::before { background: #f1c40f; }
+.sync-ind.offline::before { background: #95a5a6; }
+.sync-ind.error::before { background: #ff7675; }
+.sync-ind.enviando::before { background: #74b9ff; animation: sync-pulso 0.8s infinite alternate; }
+@keyframes sync-pulso { from { opacity: 0.3; } to { opacity: 1; } }
+
+/* Las tablas anchas se desplazan dentro de su tarjeta en vez de romper la pantalla */
+.card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 760px) {
+  .topbar { padding: 8px 12px; gap: 6px; }
+  .topbar h1 { font-size: 16px; }
+  .topbar nav {
+    order: 3; width: 100%;
+    display: flex; overflow-x: auto; white-space: nowrap; gap: 2px;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px;
+  }
+  .topbar nav::-webkit-scrollbar { display: none; }
+  .topbar nav a { margin-right: 0; padding: 8px 10px; flex: 0 0 auto; }
+  .topbar .userinfo { font-size: 12px; gap: 6px; }
+  .container { margin: 10px auto; padding: 0 10px; }
+  .card { padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+  .tabs { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+  .tabs button { flex: 0 0 auto; }
+  .flex > div { min-width: 100%; }
+  /* 16px evita que Android haga zoom al escribir */
+  input, select, textarea { font-size: 16px; }
+  button { padding: 10px 14px; }
+  button.small { padding: 7px 10px; }
+  th, td { padding: 6px; font-size: 13px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+  .total-box { font-size: 20px; }
+
+  /* Vender y Mesa: en PC van lado a lado; en celular, productos arriba
+     (con su propio scroll) y la cuenta actual debajo */
+  html, body { height: auto; }
+  .venta-wrap { flex-direction: column; height: auto !important; padding: 8px 10px !important; gap: 10px !important; }
+  .productos-panel { flex: none !important; max-height: 50vh; padding: 10px !important; }
+  .productos-panel h2 { font-size: 18px; margin-bottom: 6px; }
+  .productos-panel > div[style*="display:flex"] { flex-wrap: wrap; }
+  .carrito-panel { flex: none !important; min-width: 0 !important; max-width: none !important; padding: 12px !important; overflow: visible !important; }
+  .carrito-panel h2 { font-size: 18px; }
+  .carrito-scroll { max-height: 30vh; min-height: 40px !important; }
+}

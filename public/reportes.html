@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Reportes</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <h1>🍔 Comidas Rápidas</h1>
+    <nav id="nav"></nav>
+    <div class="userinfo" id="userinfo"></div>
+  </div>
+  <div class="container">
+    <div class="tabs">
+      <button class="active" onclick="mostrar('diario', this)">📅 Reporte diario</button>
+      <button onclick="mostrar('mensual', this)">🗓️ Reporte mensual</button>
+      <button onclick="mostrar('rentabilidad', this)">💰 Rentabilidad</button>
+    </div>
+
+    <div id="diario" class="card">
+      <h2>Reporte diario de ventas</h2>
+      <label>Fecha</label>
+      <input type="date" id="fechaDiario">
+      <button onclick="cargarDiario()">Consultar</button>
+      <div class="total-box" id="totalDiario"></div>
+      <table>
+        <thead><tr><th>Producto</th><th>Cantidad vendida</th><th>Total</th></tr></thead>
+        <tbody id="tablaDiario"></tbody>
+      </table>
+    </div>
+
+    <div id="mensual" class="card" style="display:none;">
+      <h2>Reporte mensual de ventas</h2>
+      <div class="flex">
+        <div><label>Año</label><input type="number" id="anioMensual"></div>
+        <div><label>Mes</label>
+          <select id="mesMensual">
+            <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+            <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+            <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+            <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+          </select>
+        </div>
+      </div>
+      <button onclick="cargarMensual()">Consultar</button>
+      <div class="total-box" id="totalMensual"></div>
+      <table>
+        <thead><tr><th>Día</th><th>Total vendido</th></tr></thead>
+        <tbody id="tablaMensual"></tbody>
+      </table>
+    </div>
+
+    <div id="rentabilidad" class="card" style="display:none;">
+      <h2>Reporte de ganancias / rentabilidad</h2>
+      <div class="flex">
+        <div><label>Desde</label><input type="date" id="rentDesde"></div>
+        <div><label>Hasta</label><input type="date" id="rentHasta"></div>
+      </div>
+      <button onclick="cargarRentabilidad()">Consultar</button>
+      <div class="flex" style="margin-top:14px;">
+        <div class="card" style="text-align:center;"><div style="font-size:13px;color:#888;">Ingresos</div><div id="rIngresos" style="font-size:22px;font-weight:bold;"></div></div>
+        <div class="card" style="text-align:center;"><div style="font-size:13px;color:#888;">Costo de productos</div><div id="rCosto" style="font-size:22px;font-weight:bold;"></div></div>
+        <div class="card" style="text-align:center;"><div style="font-size:13px;color:#888;">Ganancia bruta</div><div id="rGanancia" style="font-size:22px;font-weight:bold;color:#27ae60;"></div></div>
+      </div>
+      <div class="flex">
+        <div class="card" style="text-align:center;"><div style="font-size:13px;color:#888;">Gastos (arriendo, servicios, etc.)</div><div id="rGastos" style="font-size:22px;font-weight:bold;color:#c0392b;"></div></div>
+        <div class="card" style="text-align:center;"><div style="font-size:13px;color:#888;">Ganancia neta</div><div id="rGananciaNeta" style="font-size:22px;font-weight:bold;color:#27ae60;"></div></div>
+        <div class="card" style="text-align:center;"><div style="font-size:13px;color:#888;">Margen neto</div><div id="rMargen" style="font-size:22px;font-weight:bold;"></div></div>
+      </div>
+      <table>
+        <thead><tr><th>Producto</th><th>Cant. vendida</th><th>Ingresos</th><th>Costo</th><th>Ganancia</th></tr></thead>
+        <tbody id="tablaRentabilidad"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/comun.js"></script>
+  <script>
+    function mostrar(id, btn) {
+      ['diario','mensual','rentabilidad'].forEach(s => document.getElementById(s).style.display = s === id ? 'block' : 'none');
+      document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    async function cargarDiario() {
+      const fecha = document.getElementById('fechaDiario').value;
+      const rep = await api('/api/reports/diario?fecha=' + fecha);
+      document.getElementById('totalDiario').textContent = 'Total del día: ' + moneda(rep.total_ventas) + ' (' + rep.numero_ventas + ' ventas)';
+      document.getElementById('tablaDiario').innerHTML = Object.entries(rep.por_producto).map(([nombre, d]) => `
+        <tr><td>${nombre}</td><td>${d.cantidad}</td><td>${moneda(d.total)}</td></tr>
+      `).join('') || '<tr><td colspan="3">No hubo ventas ese día.</td></tr>';
+    }
+
+    async function cargarMensual() {
+      const anio = document.getElementById('anioMensual').value;
+      const mes = document.getElementById('mesMensual').value;
+      const rep = await api(`/api/reports/mensual?anio=${anio}&mes=${mes}`);
+      document.getElementById('totalMensual').textContent = 'Total del mes: ' + moneda(rep.total_ventas) + ' (' + rep.numero_ventas + ' ventas)';
+      const dias = Object.entries(rep.por_dia).sort();
+      document.getElementById('tablaMensual').innerHTML = dias.map(([dia, total]) => `
+        <tr><td>${dia}</td><td>${moneda(total)}</td></tr>
+      `).join('') || '<tr><td colspan="2">No hubo ventas ese mes.</td></tr>';
+    }
+
+    async function cargarRentabilidad() {
+      const desde = document.getElementById('rentDesde').value;
+      const hasta = document.getElementById('rentHasta').value;
+      const q = [];
+      if (desde) q.push('desde=' + desde);
+      if (hasta) q.push('hasta=' + hasta);
+      const rep = await api('/api/reports/rentabilidad?' + q.join('&'));
+      document.getElementById('rIngresos').textContent = moneda(rep.ingresos);
+      document.getElementById('rCosto').textContent = moneda(rep.costo);
+      document.getElementById('rGanancia').textContent = moneda(rep.ganancia);
+      document.getElementById('rGastos').textContent = moneda(rep.gastos);
+      document.getElementById('rGananciaNeta').textContent = moneda(rep.ganancia_neta);
+      document.getElementById('rMargen').textContent = rep.margen_neto_porcentaje.toFixed(1) + '%';
+      document.getElementById('tablaRentabilidad').innerHTML = Object.entries(rep.por_producto).map(([nombre, d]) => `
+        <tr><td>${nombre}</td><td>${d.cantidad}</td><td>${moneda(d.ingresos)}</td><td>${moneda(d.costo)}</td><td>${moneda(d.ingresos - d.costo)}</td></tr>
+      `).join('') || '<tr><td colspan="5">No hay datos en ese rango.</td></tr>';
+    }
+
+    (async () => {
+      const user = await protegerPagina('reportes.html', ['admin']);
+      if (!user) return;
+      const hoy = new Date();
+      document.getElementById('fechaDiario').value = fechaHoyLocal();
+      document.getElementById('anioMensual').value = hoy.getFullYear();
+      document.getElementById('mesMensual').value = hoy.getMonth() + 1;
+      cargarDiario();
+    })();
+  </script>
+</body>
+</html>

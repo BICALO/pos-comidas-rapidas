@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Inventario</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <h1>🍔 Comidas Rápidas</h1>
+    <nav id="nav"></nav>
+    <div class="userinfo" id="userinfo"></div>
+  </div>
+  <div class="container">
+    <div class="tabs">
+      <button class="active" onclick="mostrar('entradas', this)">📥 Factura / entrada</button>
+      <button onclick="mostrar('bajas', this)">🗑️ Baja</button>
+      <button onclick="mostrar('listado', this)">📋 Facturas y bajas</button>
+      <button onclick="mostrar('vivo', this)">📡 Inventario en vivo</button>
+      <button onclick="mostrar('kardex', this)">📜 Kardex (movimientos)</button>
+      <button onclick="mostrar('errores', this)">⚠️ Log de errores</button>
+    </div>
+
+    <!-- ===================== ENTRADAS ===================== -->
+    <div id="entradas" class="card">
+      <h2>Registrar factura / entrada de mercancía</h2>
+      <p style="font-size:12px;color:#666;">Puedes ingresar insumos (pan, tomate, empaques...) o productos que compras ya listos para vender. Los productos que usan receta no aparecen aquí: se abastecen comprando sus insumos.</p>
+      <div class="flex">
+        <div><label>Proveedor</label><input id="proveedor"></div>
+        <div><label>N° de factura</label><input id="numero_factura"></div>
+        <div><label>Fecha de la factura</label><input id="fechaFactura" type="date"></div>
+      </div>
+      <table>
+        <thead><tr><th>Tipo</th><th>Item</th><th>Por paquete</th><th>Cantidad total</th><th>Costo unitario</th><th>Costo total</th><th></th></tr></thead>
+        <tbody id="filasEntrada"></tbody>
+      </table>
+      <button class="small secondary" onclick="agregarFilaEntrada()">+ Agregar item</button>
+      <div class="total-box" id="totalFactura">Total de la factura: $0</div>
+      <button onclick="guardarEntrada()">✅ Confirmar y guardar entrada</button>
+      <div id="msgEntrada" class="error"></div>
+    </div>
+
+    <!-- ===================== BAJAS ===================== -->
+    <div id="bajas" class="card" style="display:none;">
+      <h2>Registrar baja (merma, daño, vencimiento, etc.)</h2>
+      <label>Tipo</label>
+      <select id="bajaTipo" onchange="pintarSelectorBaja()">
+        <option value="insumo">Insumo</option>
+        <option value="producto">Producto</option>
+      </select>
+      <label>Item</label>
+      <select id="bajaItem"></select>
+      <label>Cantidad a dar de baja</label>
+      <input id="bajaCantidad" type="number" step="0.01">
+      <label>Motivo</label>
+      <input id="bajaMotivo" placeholder="Ej: producto vencido, se dañó, error de conteo...">
+      <br><br>
+      <button onclick="guardarBaja()">Registrar baja</button>
+      <div id="msgBaja" class="error"></div>
+    </div>
+
+    <!-- ===================== LISTADO DE FACTURAS Y BAJAS ===================== -->
+    <div id="listado" class="card" style="display:none;">
+      <h2>Reporte de compras (facturas ingresadas)</h2>
+      <div class="flex">
+        <div><label>Desde</label><input type="date" id="lDesde" onchange="cargarListado()"></div>
+        <div><label>Hasta</label><input type="date" id="lHasta" onchange="cargarListado()"></div>
+        <div><label>&nbsp;</label><button class="secondary" onclick="document.getElementById('lDesde').value='';document.getElementById('lHasta').value='';cargarListado();">Quitar filtro de fechas</button></div>
+      </div>
+      <table>
+        <thead><tr><th>Fecha</th><th>Proveedor</th><th>N° Factura</th><th>Total</th><th></th></tr></thead>
+        <tbody id="tablaCompras"></tbody>
+      </table>
+
+      <h2>Bajas registradas</h2>
+      <table>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Item</th><th>Cantidad</th><th>Motivo</th></tr></thead>
+        <tbody id="tablaBajasListado"></tbody>
+      </table>
+    </div>
+
+    <!-- ===================== INVENTARIO EN VIVO ===================== -->
+    <div id="vivo" class="card" style="display:none;">
+      <h2>Inventario en tiempo real</h2>
+      <p style="font-size:12px;color:#666;">Esta lista se trae directo de la base de datos cada vez que entras aquí. Como administrador puedes corregir el stock manualmente si algo no coincide con lo que cuentas físicamente (por ejemplo, tras un inventario físico).</p>
+      <button class="small secondary" onclick="cargarVivo()">🔄 Actualizar ahora</button>
+      <h3>Insumos</h3>
+      <table>
+        <thead><tr><th>Nombre</th><th>Stock actual</th><th>Unidad</th><th>Corregir a</th><th></th></tr></thead>
+        <tbody id="vivoInsumos"></tbody>
+      </table>
+      <h3>Productos (sin receta)</h3>
+      <table>
+        <thead><tr><th>Nombre</th><th>Stock actual</th><th>Corregir a</th><th></th></tr></thead>
+        <tbody id="vivoProductos"></tbody>
+      </table>
+      <h3>Productos con receta o combo (stock calculado, no editable aquí)</h3>
+      <table>
+        <thead><tr><th>Nombre</th><th>Stock disponible (según insumos)</th></tr></thead>
+        <tbody id="vivoProductosReceta"></tbody>
+      </table>
+    </div>
+
+    <!-- ===================== KARDEX ===================== -->
+    <div id="kardex" class="card" style="display:none;">
+      <h2>Kardex: cruce de todas las transacciones</h2>
+      <p style="font-size:12px;color:#666;">Aquí ves TODOS los movimientos de inventario en orden: compras (entrada), ventas (salida), bajas (salida) y ajustes manuales, para poder cruzar y verificar que todo cuadre.</p>
+      <div class="flex">
+        <div><label>Tipo de item</label>
+          <select id="kTipoItem" onchange="cargarKardex()">
+            <option value="">Todos</option>
+            <option value="insumo">Insumos</option>
+            <option value="producto">Productos</option>
+          </select>
+        </div>
+        <div><label>Desde</label><input type="date" id="kDesde" onchange="cargarKardex()"></div>
+        <div><label>Hasta</label><input type="date" id="kHasta" onchange="cargarKardex()"></div>
+      </div>
+      <table>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Item</th><th>Cantidad</th><th>Motivo</th></tr></thead>
+        <tbody id="tablaKardex"></tbody>
+      </table>
+    </div>
+
+    <!-- ===================== ERRORES ===================== -->
+    <div id="errores" class="card" style="display:none;">
+      <h2>Log de errores y anomalías</h2>
+      <p style="font-size:12px;color:#666;">Aquí quedan registradas cosas raras que detecta el sistema: ventas de productos que ya no existen, facturas con items eliminados, recetas que usan un insumo borrado, etc.</p>
+      <button class="small secondary" onclick="cargarErrores()">🔄 Actualizar</button>
+      <button class="small secondary" onclick="limpiarErrores()">🧹 Limpiar log</button>
+      <table>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Mensaje</th></tr></thead>
+        <tbody id="tablaErrores"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/comun.js"></script>
+  <script>
+    let productos = [];
+    let insumos = [];
+
+    function mostrar(id, btn) {
+      ['entradas','bajas','listado','vivo','kardex','errores'].forEach(s => document.getElementById(s).style.display = s === id ? 'block' : 'none');
+      document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (id === 'listado') cargarListado();
+      if (id === 'vivo') cargarVivo();
+      if (id === 'kardex') cargarKardex();
+      if (id === 'errores') cargarErrores();
+    }
+
+    // -------- ENTRADAS --------
+    function opciones(tipo) {
+      const lista = tipo === 'insumo' ? insumos : productos.filter(p => !p.tiene_receta && !p.tiene_combo);
+      return lista.map(x => `<option value="${x.id}">${x.nombre}</option>`).join('');
+    }
+
+    function agregarFilaEntrada() {
+      const tbody = document.getElementById('filasEntrada');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <select class="tipo" onchange="this.closest('tr').querySelector('.item').innerHTML = opciones(this.value)">
+            <option value="insumo">Insumo</option>
+            <option value="producto">Producto</option>
+          </select>
+        </td>
+        <td><select class="item">${opciones('insumo')}</select></td>
+        <td style="text-align:center;"><input type="checkbox" class="porPaquete" style="width:auto;" onchange="togglePaquete(this)"></td>
+        <td>
+          <input class="cant" type="number" step="0.01" value="1" oninput="recalcularFila(this)">
+          <div class="paqueteCampos" style="display:none; margin-top:4px;">
+            <input class="paquetes" type="number" step="1" value="1" placeholder="N° paquetes" oninput="recalcularFila(this)">
+            <input class="contenido" type="number" step="0.01" value="1" placeholder="Contenido/paquete" oninput="recalcularFila(this)">
+          </div>
+        </td>
+        <td>
+          <input class="costo" type="number" step="0.01" value="0" oninput="recalcularFila(this)">
+          <div class="paqueteCampos2" style="display:none; margin-top:4px;">
+            <input class="costoPaquete" type="number" step="0.01" value="0" placeholder="Costo del paquete" oninput="recalcularFila(this)">
+          </div>
+        </td>
+        <td class="totalFila">$0</td>
+        <td><button class="small secondary" onclick="this.closest('tr').remove(); recalcularTotalFactura();">Quitar</button></td>`;
+      tbody.appendChild(tr);
+      recalcularTotalFactura();
+    }
+
+    function togglePaquete(chk) {
+      const tr = chk.closest('tr');
+      const porPaquete = chk.checked;
+      tr.querySelector('.paqueteCampos').style.display = porPaquete ? 'block' : 'none';
+      tr.querySelector('.paqueteCampos2').style.display = porPaquete ? 'block' : 'none';
+      tr.querySelector('.cant').readOnly = porPaquete;
+      tr.querySelector('.costo').readOnly = porPaquete;
+      recalcularFila(chk);
+    }
+
+    function recalcularFila(el) {
+      const tr = el.closest('tr');
+      const porPaquete = tr.querySelector('.porPaquete').checked;
+      if (porPaquete) {
+        const paquetes = Number(tr.querySelector('.paquetes').value) || 0;
+        const contenido = Number(tr.querySelector('.contenido').value) || 0;
+        const costoPaquete = Number(tr.querySelector('.costoPaquete').value) || 0;
+        const cantidadTotal = paquetes * contenido;
+        const costoUnitario = contenido > 0 ? costoPaquete / contenido : 0;
+        tr.querySelector('.cant').value = cantidadTotal.toFixed(2);
+        tr.querySelector('.costo').value = costoUnitario.toFixed(4);
+        tr.querySelector('.totalFila').textContent = moneda(paquetes * costoPaquete);
+      } else {
+        const cant = Number(tr.querySelector('.cant').value) || 0;
+        const costo = Number(tr.querySelector('.costo').value) || 0;
+        tr.querySelector('.totalFila').textContent = moneda(cant * costo);
+      }
+      recalcularTotalFactura();
+    }
+
+    // Suma el total de TODAS las filas, para que puedas revisar el valor de
+    // la factura completa antes de darle a guardar.
+    function recalcularTotalFactura() {
+      const filas = [...document.querySelectorAll('#filasEntrada tr')];
+      let total = 0;
+      filas.forEach(tr => {
+        const cant = Number(tr.querySelector('.cant').value) || 0;
+        const costo = Number(tr.querySelector('.costo').value) || 0;
+        total += cant * costo;
+      });
+      document.getElementById('totalFactura').textContent = `Total de la factura: ${moneda(total)} (${filas.length} item${filas.length === 1 ? '' : 's'})`;
+      return total;
+    }
+
+    async function guardarEntrada() {
+      const filas = [...document.querySelectorAll('#filasEntrada tr')];
+      if (!filas.length) { document.getElementById('msgEntrada').textContent = 'Agrega al menos un item.'; return; }
+      const items = filas.map(tr => ({
+        tipo: tr.querySelector('.tipo').value,
+        item_id: Number(tr.querySelector('.item').value),
+        cantidad: Number(tr.querySelector('.cant').value),
+        costo_unitario: Number(tr.querySelector('.costo').value)
+      }));
+      const total = recalcularTotalFactura();
+      const nombresItems = filas.map(tr => tr.querySelector('.item').selectedOptions[0].textContent).join(', ');
+      const confirmar = confirm(
+        `Vas a registrar esta factura:\n\n` +
+        `Proveedor: ${document.getElementById('proveedor').value || '(sin proveedor)'}\n` +
+        `N° factura: ${document.getElementById('numero_factura').value || '(sin número)'}\n` +
+        `Items (${items.length}): ${nombresItems}\n\n` +
+        `TOTAL: ${moneda(total)}\n\n` +
+        `¿El valor es correcto? Acepta para guardarla.`
+      );
+      if (!confirmar) return;
+      try {
+        await api('/api/purchases', { method: 'POST', body: JSON.stringify({
+          proveedor: document.getElementById('proveedor').value,
+          numero_factura: document.getElementById('numero_factura').value,
+          fecha: document.getElementById('fechaFactura').value || undefined,
+          items
+        })});
+        document.getElementById('msgEntrada').className = 'ok';
+        document.getElementById('msgEntrada').textContent = `Entrada registrada por ${moneda(total)}. El inventario y los costos fueron actualizados.`;
+        document.getElementById('filasEntrada').innerHTML = '';
+        recalcularTotalFactura();
+        cargarListas();
+      } catch (e) {
+        document.getElementById('msgEntrada').className = 'error';
+        document.getElementById('msgEntrada').textContent = e.message;
+      }
+    }
+
+    // -------- BAJAS --------
+    function pintarSelectorBaja() {
+      document.getElementById('bajaItem').innerHTML = opciones(document.getElementById('bajaTipo').value);
+    }
+
+    async function guardarBaja() {
+      try {
+        await api('/api/adjustments', { method: 'POST', body: JSON.stringify({
+          tipo: document.getElementById('bajaTipo').value,
+          item_id: Number(document.getElementById('bajaItem').value),
+          cantidad: Number(document.getElementById('bajaCantidad').value),
+          motivo: document.getElementById('bajaMotivo').value
+        })});
+        document.getElementById('msgBaja').className = 'ok';
+        document.getElementById('msgBaja').textContent = 'Baja registrada correctamente.';
+        cargarListas();
+      } catch (e) {
+        document.getElementById('msgBaja').className = 'error';
+        document.getElementById('msgBaja').textContent = e.message;
+      }
+    }
+
+    // -------- LISTADO: FACTURAS Y BAJAS --------
+    async function cargarListado() {
+      const q = [];
+      const desde = document.getElementById('lDesde').value;
+      const hasta = document.getElementById('lHasta').value;
+      if (desde) q.push('desde=' + desde);
+      if (hasta) q.push('hasta=' + hasta);
+      const compras = await api('/api/purchases?' + q.join('&'));
+      document.getElementById('tablaCompras').innerHTML = compras.map(c => `
+        <tr>
+          <td>${new Date(c.fecha).toLocaleString('es-CO')}</td>
+          <td>${c.proveedor || '-'}</td>
+          <td>${c.numero_factura || '-'}</td>
+          <td>${moneda(c.total)}</td>
+          <td><button class="small secondary" onclick="verDetalleCompra(${c.id})">Ver items</button></td>
+        </tr>
+        <tr id="detalleCompra_${c.id}" style="display:none;">
+          <td colspan="5">
+            <table>
+              <thead><tr><th>Item</th><th>Tipo</th><th>Cantidad</th><th>Costo unitario</th><th>Subtotal</th></tr></thead>
+              <tbody>
+                ${c.items.map(it => `<tr><td>${it.nombre}</td><td>${it.tipo}</td><td>${it.cantidad}</td><td>${moneda(it.costo_unitario)}</td><td>${moneda(it.subtotal)}</td></tr>`).join('')}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="5" style="color:#999;">No hay facturas registradas en este rango.</td></tr>';
+
+      const bajas = await api('/api/adjustments');
+      document.getElementById('tablaBajasListado').innerHTML = bajas.map(b => `
+        <tr>
+          <td>${new Date(b.fecha).toLocaleString('es-CO')}</td>
+          <td>${b.tipo || 'producto'}</td>
+          <td>${b.nombre_producto}</td>
+          <td>${b.cantidad}</td>
+          <td>${b.motivo}</td>
+        </tr>`).join('') || '<tr><td colspan="5" style="color:#999;">No hay bajas registradas.</td></tr>';
+    }
+
+    function verDetalleCompra(id) {
+      const fila = document.getElementById('detalleCompra_' + id);
+      fila.style.display = fila.style.display === 'none' ? 'table-row' : 'none';
+    }
+
+    // -------- INVENTARIO EN VIVO --------
+    async function cargarVivo() {
+      [productos, insumos] = await Promise.all([api('/api/products'), api('/api/insumos')]);
+      document.getElementById('vivoInsumos').innerHTML = insumos.map(i => `
+        <tr>
+          <td>${i.nombre}</td>
+          <td>${i.stock}</td>
+          <td>${i.unidad}</td>
+          <td><input type="number" step="0.01" id="ins_${i.id}" value="${i.stock}" style="width:100px;"></td>
+          <td><button class="small" onclick="ajustarInsumo(${i.id})">Guardar</button></td>
+        </tr>`).join('');
+      const sinReceta = productos.filter(p => !p.tiene_receta && !p.tiene_combo);
+      const conReceta = productos.filter(p => p.tiene_receta || p.tiene_combo);
+      document.getElementById('vivoProductos').innerHTML = sinReceta.map(p => `
+        <tr>
+          <td>${p.nombre}</td>
+          <td>${p.stock}</td>
+          <td><input type="number" step="0.01" id="prod_${p.id}" value="${p.stock}" style="width:100px;"></td>
+          <td><button class="small" onclick="ajustarProducto(${p.id})">Guardar</button></td>
+        </tr>`).join('');
+      document.getElementById('vivoProductosReceta').innerHTML = conReceta.map(p => `
+        <tr><td>${p.nombre} ${p.tiene_combo ? '<span class="badge" style="background:#d6eaf8;">combo</span>' : ''}</td><td>${p.stock}</td></tr>`).join('');
+    }
+
+    async function ajustarInsumo(id) {
+      const nuevo = Number(document.getElementById('ins_' + id).value);
+      const motivo = prompt('Motivo del ajuste (opcional):', 'Ajuste tras conteo físico');
+      if (motivo === null) return;
+      await api('/api/insumos/' + id + '/ajustar', { method: 'POST', body: JSON.stringify({ stock_nuevo: nuevo, motivo }) });
+      cargarVivo();
+    }
+
+    async function ajustarProducto(id) {
+      const nuevo = Number(document.getElementById('prod_' + id).value);
+      const motivo = prompt('Motivo del ajuste (opcional):', 'Ajuste tras conteo físico');
+      if (motivo === null) return;
+      await api('/api/products/' + id + '/ajustar', { method: 'POST', body: JSON.stringify({ stock_nuevo: nuevo, motivo }) });
+      cargarVivo();
+    }
+
+    // -------- KARDEX --------
+    async function cargarKardex() {
+      const q = [];
+      const tipoItem = document.getElementById('kTipoItem').value;
+      const desde = document.getElementById('kDesde').value;
+      const hasta = document.getElementById('kHasta').value;
+      if (tipoItem) q.push('tipo_item=' + tipoItem);
+      if (desde) q.push('desde=' + desde);
+      if (hasta) q.push('hasta=' + hasta);
+      const mov = await api('/api/movimientos?' + q.join('&'));
+      document.getElementById('tablaKardex').innerHTML = mov.map(m => `
+        <tr>
+          <td>${new Date(m.fecha).toLocaleString('es-CO')}</td>
+          <td>${m.tipo}</td>
+          <td>${m.nombre} <span class="badge">${m.tipo_item}</span></td>
+          <td style="color:${m.cantidad < 0 ? '#c0392b' : '#27ae60'};">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td>
+          <td>${m.motivo || ''}</td>
+        </tr>`).join('') || '<tr><td colspan="5" style="color:#999;">No hay movimientos en este rango.</td></tr>';
+    }
+
+    // -------- ERRORES --------
+    async function cargarErrores() {
+      const errores = await api('/api/errores');
+      document.getElementById('tablaErrores').innerHTML = errores.map(e => `
+        <tr>
+          <td>${new Date(e.fecha).toLocaleString('es-CO')}</td>
+          <td>${e.tipo}</td>
+          <td>${e.mensaje}</td>
+        </tr>`).join('') || '<tr><td colspan="3" style="color:#999;">Sin errores registrados. 🎉</td></tr>';
+    }
+
+    async function limpiarErrores() {
+      if (!confirm('¿Borrar todo el log de errores?')) return;
+      await api('/api/errores', { method: 'DELETE' });
+      cargarErrores();
+    }
+
+    async function cargarListas() {
+      [productos, insumos] = await Promise.all([api('/api/products'), api('/api/insumos')]);
+      pintarSelectorBaja();
+    }
+
+    (async () => {
+      const user = await protegerPagina('inventario.html', ['admin']);
+      if (!user) return;
+      document.getElementById('fechaFactura').value = fechaHoyLocal();
+      await cargarListas();
+      agregarFilaEntrada();
+    })();
+  </script>
+</body>
+</html>

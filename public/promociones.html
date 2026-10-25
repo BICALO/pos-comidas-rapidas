@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Promociones</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <h1>🍔 Comidas Rápidas</h1>
+    <nav id="nav"></nav>
+    <div class="userinfo" id="userinfo"></div>
+  </div>
+  <div class="container">
+    <div class="card">
+      <p style="font-size:13px;color:#666;">
+        Crea una promoción temporal para un producto o combo: mientras la fecha de hoy esté
+        entre "Desde" y "Hasta" (incluidos), ese producto se vende automáticamente al precio
+        promocional en la pantalla de Ventas — no tienes que activarla ni desactivarla a mano
+        cada día.
+      </p>
+      <h2>Crear promoción</h2>
+      <div class="flex">
+        <div><label>Producto</label><select id="producto"></select></div>
+        <div><label>Nombre de la promoción</label><input id="nombre" placeholder="Ej: 2x1 miércoles, Promo de lanzamiento..."></div>
+      </div>
+      <div class="flex">
+        <div><label>Precio normal</label><input id="precioNormal" disabled></div>
+        <div><label>Precio promocional</label><input id="precio" type="number" step="0.01"></div>
+        <div><label>Desde</label><input id="desde" type="date"></div>
+        <div><label>Hasta</label><input id="hasta" type="date"></div>
+      </div>
+      <br>
+      <button onclick="crearPromo()">Crear promoción</button>
+      <div id="msg" class="error"></div>
+    </div>
+
+    <div class="card">
+      <h2>Promociones</h2>
+      <table>
+        <thead><tr><th>Producto</th><th>Promoción</th><th>Precio normal</th><th>Precio promo</th><th>Vigencia</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tabla"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/comun.js"></script>
+  <script>
+    let productos = [];
+
+    async function cargar() {
+      const [promos, prods] = await Promise.all([api('/api/promotions'), api('/api/products')]);
+      productos = prods;
+      document.getElementById('producto').innerHTML = productos.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+      actualizarPrecioNormal();
+      pintar(promos);
+    }
+
+    function actualizarPrecioNormal() {
+      const p = productos.find(p => p.id === Number(document.getElementById('producto').value));
+      document.getElementById('precioNormal').value = p ? moneda(p.precio_venta) : '';
+    }
+
+    function pintar(promos) {
+      document.getElementById('tabla').innerHTML = promos.map(pr => `
+        <tr>
+          <td>${pr.nombre_producto}</td>
+          <td>${pr.nombre}</td>
+          <td>${pr.precio_normal !== null ? moneda(pr.precio_normal) : '-'}</td>
+          <td>${moneda(pr.precio_promocional)}</td>
+          <td>${pr.desde} → ${pr.hasta}</td>
+          <td>${pr.activa === false ? '<span class="badge">desactivada</span>' : (pr.vigente_hoy ? '<span class="badge admin">vigente hoy</span>' : '<span class="badge">programada/vencida</span>')}</td>
+          <td>
+            <button class="small secondary" onclick="toggleActiva(${pr.id}, ${pr.activa === false})">${pr.activa === false ? 'Activar' : 'Desactivar'}</button>
+            <button class="small secondary" onclick="eliminarPromo(${pr.id})">Eliminar</button>
+          </td>
+        </tr>`).join('') || '<tr><td colspan="7" style="color:#999;">Aún no has creado promociones.</td></tr>';
+    }
+
+    async function crearPromo() {
+      document.getElementById('msg').textContent = '';
+      try {
+        await api('/api/promotions', { method: 'POST', body: JSON.stringify({
+          product_id: Number(document.getElementById('producto').value),
+          nombre: document.getElementById('nombre').value,
+          precio_promocional: document.getElementById('precio').value,
+          desde: document.getElementById('desde').value,
+          hasta: document.getElementById('hasta').value
+        })});
+        document.getElementById('nombre').value = '';
+        document.getElementById('precio').value = '';
+        cargar();
+      } catch (e) {
+        document.getElementById('msg').textContent = e.message;
+      }
+    }
+
+    async function toggleActiva(id, activa) {
+      await api('/api/promotions/' + id, { method: 'PUT', body: JSON.stringify({ activa }) });
+      cargar();
+    }
+
+    async function eliminarPromo(id) {
+      if (!confirm('¿Eliminar esta promoción?')) return;
+      await api('/api/promotions/' + id, { method: 'DELETE' });
+      cargar();
+    }
+
+    (async () => {
+      const user = await protegerPagina('promociones.html', ['admin']);
+      if (!user) return;
+      document.getElementById('desde').value = fechaHoyLocal();
+      document.getElementById('hasta').value = fechaHoyLocal();
+      document.getElementById('producto').addEventListener('change', actualizarPrecioNormal);
+      cargar();
+    })();
+  </script>
+</body>
+</html>

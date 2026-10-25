@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Insumos</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <h1>🍔 Comidas Rápidas</h1>
+    <nav id="nav"></nav>
+    <div class="userinfo" id="userinfo"></div>
+  </div>
+  <div class="container">
+    <div class="card">
+      <p style="font-size:13px;color:#666;">
+        Los insumos son las materias primas con las que preparas tus productos: pan, tomate,
+        lechuga, cebolla, salsas, papa francesa, empaques, etc. Se compran por factura
+        (sección Inventario) y luego se usan para armar la <b>receta</b> de cada producto en
+        la sección Productos.
+      </p>
+      <p style="font-size:13px;color:#666;">
+        <b>Conversión de unidades:</b> si compras algo en una unidad (ej: "unidad" completa de
+        lechuga, o gramos de tomate) pero lo usas en la receta en una unidad más pequeña (ej:
+        "hoja" o "rodaja"), puedes indicarlo abajo. Ejemplo: compras lechuga por unidad y cada
+        lechuga rinde 10 hojas → unidad de compra = <i>unidad</i>, unidad de uso = <i>hoja</i>,
+        equivalencia = <i>10</i>. Otro ejemplo: compras tomate por gramo y cada rodaja pesa 15
+        gramos → unidad de compra = <i>gramo</i>, unidad de uso = <i>rodaja</i>,
+        equivalencia = <i>15</i>. Si no necesitas conversión (usas la misma unidad en la que
+        compras), deja la equivalencia en 1.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2 id="tituloForm">Agregar insumo</h2>
+      <form onsubmit="return guardarInsumo(event)">
+        <input type="hidden" id="editId">
+        <div class="flex">
+          <div><label>Nombre</label><input id="nombre" required placeholder="Ej: Tomate"></div>
+          <div><label>Unidad de compra</label><input id="unidad" placeholder="Ej: gramo, unidad, ml, paquete"></div>
+          <div><label>Costo actual (por unidad de compra)</label><input id="costo" type="number" step="0.01" required></div>
+          <div><label>Stock actual (en unidad de compra)</label><input id="stock" type="number" step="0.01"></div>
+        </div>
+        <div class="flex">
+          <div><label>Unidad de uso en receta</label><input id="unidad_uso" placeholder="Ej: rodaja, hoja (igual a la de compra si no aplica)"></div>
+          <div><label>Equivalencia (unidades de compra por 1 unidad de uso)</label><input id="equivalencia" type="number" step="0.01" value="1"></div>
+        </div>
+        <br>
+        <button type="submit" id="btnGuardar">Guardar insumo</button>
+        <button type="button" class="secondary" onclick="cancelarEdicion()">Cancelar</button>
+        <div id="msg" class="error"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Insumos existentes</h2>
+      <table>
+        <thead><tr><th>Nombre</th><th>Compra en</th><th>Costo</th><th>Stock</th><th>Uso en receta</th><th></th></tr></thead>
+        <tbody id="tabla"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Empaque para pedidos "para llevar"</h2>
+      <p style="font-size:13px;color:#666;">
+        Cuando en Ventas marques un pedido como "Para llevar", estos insumos se descuentan
+        UNA vez por venta (no por cada producto). Ej: 1 bolsa + 1 empaque general.
+      </p>
+      <table>
+        <thead><tr><th>Insumo</th><th>Cantidad por pedido</th><th></th></tr></thead>
+        <tbody id="filasEmpaque"></tbody>
+      </table>
+      <button class="small secondary" onclick="agregarFilaEmpaque()">+ Agregar insumo</button>
+      <br><br>
+      <button onclick="guardarEmpaque()">Guardar configuración</button>
+      <div id="msgEmpaque" class="ok"></div>
+    </div>
+  </div>
+
+  <script src="js/comun.js"></script>
+  <script>
+    let insumos = [];
+
+    async function cargar() {
+      insumos = await api('/api/insumos');
+      pintar();
+    }
+
+    function pintar() {
+      document.getElementById('tabla').innerHTML = insumos.map(i => `
+        <tr>
+          <td>${i.nombre}</td>
+          <td>${i.unidad}</td>
+          <td>${moneda(i.costo)} / ${i.unidad}</td>
+          <td>${i.stock} ${i.unidad}</td>
+          <td>${i.equivalencia && i.equivalencia != 1 ? `1 ${i.unidad_uso} = ${i.equivalencia} ${i.unidad}` : `${i.unidad_uso || i.unidad} (sin conversión)`}</td>
+          <td>
+            <button class="small" onclick="editar(${i.id})">Editar</button>
+            <button class="small secondary" onclick="eliminar(${i.id})">Eliminar</button>
+          </td>
+        </tr>`).join('') || '<tr><td colspan="6" style="color:#999;">Aún no has agregado insumos.</td></tr>';
+    }
+
+    function editar(id) {
+      const i = insumos.find(i => i.id === id);
+      document.getElementById('editId').value = i.id;
+      document.getElementById('nombre').value = i.nombre;
+      document.getElementById('unidad').value = i.unidad;
+      document.getElementById('costo').value = i.costo;
+      document.getElementById('stock').value = i.stock;
+      document.getElementById('unidad_uso').value = i.unidad_uso || i.unidad;
+      document.getElementById('equivalencia').value = i.equivalencia || 1;
+      document.getElementById('tituloForm').textContent = 'Editar insumo: ' + i.nombre;
+      window.scrollTo(0,0);
+    }
+
+    function cancelarEdicion() {
+      document.getElementById('editId').value = '';
+      document.getElementById('nombre').value = '';
+      document.getElementById('unidad').value = '';
+      document.getElementById('costo').value = '';
+      document.getElementById('stock').value = '';
+      document.getElementById('unidad_uso').value = '';
+      document.getElementById('equivalencia').value = 1;
+      document.getElementById('tituloForm').textContent = 'Agregar insumo';
+    }
+
+    async function eliminar(id) {
+      if (!confirm('¿Eliminar este insumo? (No lo hagas si ya lo usas en alguna receta)')) return;
+      await api('/api/insumos/' + id, { method: 'DELETE' });
+      cargar();
+    }
+
+    async function guardarInsumo(ev) {
+      ev.preventDefault();
+      document.getElementById('msg').textContent = '';
+      const id = document.getElementById('editId').value;
+      const unidad = document.getElementById('unidad').value || 'unidad';
+      const body = JSON.stringify({
+        nombre: document.getElementById('nombre').value,
+        unidad,
+        unidad_uso: document.getElementById('unidad_uso').value || unidad,
+        equivalencia: document.getElementById('equivalencia').value || 1,
+        costo: document.getElementById('costo').value,
+        stock: document.getElementById('stock').value || 0
+      });
+      try {
+        if (id) await api('/api/insumos/' + id, { method: 'PUT', body });
+        else await api('/api/insumos', { method: 'POST', body });
+        cancelarEdicion();
+        cargar();
+      } catch (e) {
+        document.getElementById('msg').textContent = e.message;
+      }
+      return false;
+    }
+
+    function opcionesInsumosSimple() {
+      return insumos.map(i => `<option value="${i.id}">${i.nombre}</option>`).join('');
+    }
+
+    function agregarFilaEmpaque(insumo_id, cantidad) {
+      const tbody = document.getElementById('filasEmpaque');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><select class="ins">${opcionesInsumosSimple()}</select></td>
+        <td><input class="cant" type="number" step="0.01" value="${cantidad || 1}"></td>
+        <td><button type="button" class="small secondary" onclick="this.closest('tr').remove()">Quitar</button></td>`;
+      tbody.appendChild(tr);
+      if (insumo_id) tr.querySelector('.ins').value = insumo_id;
+    }
+
+    async function guardarEmpaque() {
+      const filas = [...document.querySelectorAll('#filasEmpaque tr')];
+      const items = filas.map(tr => ({ insumo_id: Number(tr.querySelector('.ins').value), cantidad: Number(tr.querySelector('.cant').value) }));
+      await api('/api/config/empaque', { method: 'PUT', body: JSON.stringify({ items }) });
+      document.getElementById('msgEmpaque').textContent = 'Configuración guardada.';
+      setTimeout(() => document.getElementById('msgEmpaque').textContent = '', 2500);
+    }
+
+    async function cargarEmpaque() {
+      const items = await api('/api/config/empaque');
+      document.getElementById('filasEmpaque').innerHTML = '';
+      items.forEach(it => agregarFilaEmpaque(it.insumo_id, it.cantidad));
+    }
+
+    (async () => {
+      const user = await protegerPagina('insumos.html', ['admin']);
+      if (!user) return;
+      await cargar();
+      cargarEmpaque();
+    })();
+  </script>
+</body>
+</html>

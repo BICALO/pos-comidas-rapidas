@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Vender</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .cat-header { grid-column: 1 / -1; margin: 14px 0 4px; color:#c0392b; border-bottom:2px solid #f4d7d2; padding-bottom:4px; }
+  .metodo-btn { background:#eee; color:#333; }
+  .metodo-btn.active { background:#c0392b; color:white; }
+  .llevar-btn { background:#eee; color:#333; }
+  .llevar-btn.active { background:#e67e22; color:white; }
+  .vista-btn { background:#eee; color:#333; }
+  .vista-btn.active { background:#7f8c8d; color:white; }
+  .orden-btn { background:#eee; color:#333; }
+  .orden-btn.active { background:#2980b9; color:white; }
+
+  /* Vista compacta: cards chiquitas, sin foto grande, para que quepan
+     muchos productos sin necesidad de hacer scroll. */
+  .grid.compacta { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 5px; }
+  .prod-card.compacta { padding: 5px 3px; }
+  .prod-card.compacta img, .prod-card.compacta .noimg { height: 30px; margin-bottom: 2px; }
+  .prod-card.compacta .nombre { font-size: 10.5px; line-height: 1.15; margin: 2px 0 1px; }
+  .prod-card.compacta .precio { font-size: 11px; }
+  .prod-card.compacta .stock-txt { display: none; }
+  .cat-header.compacta { margin: 8px 0 3px; font-size: 13px; padding-bottom: 2px; }
+
+  /* Vista sin fotos: filas de texto, la mas densa de todas */
+  .grid.sinfoto { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 4px; }
+  .prod-card.sinfoto { padding: 4px 3px; }
+  .prod-card.sinfoto img, .prod-card.sinfoto .noimg { display: none; }
+  .prod-card.sinfoto .nombre { font-size: 10px; line-height: 1.1; margin: 0 0 1px; }
+  .prod-card.sinfoto .precio { font-size: 10.5px; }
+  .prod-card.sinfoto .stock-txt { display: none; }
+
+  /* Layout de venta: los productos hacen scroll por su cuenta, la cuenta
+     actual (carrito) queda siempre visible, sin necesidad de hacer scroll. */
+  html, body { height: 100%; }
+  .venta-wrap {
+    display: flex;
+    gap: 16px;
+    height: calc(100vh - 78px);
+    padding: 12px 16px;
+    max-width: 1300px;
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
+  .productos-panel {
+    flex: 2;
+    min-width: 0;
+    overflow-y: auto;
+    background: white;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  }
+  .carrito-panel {
+    flex: 1;
+    min-width: 300px;
+    max-width: 380px;
+    background: white;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .carrito-scroll { flex: 1; overflow-y: auto; min-height: 60px; }
+  .carrito-fijo { flex-shrink: 0; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>🍔 Comidas Rápidas</h1>
+    <nav id="nav"></nav>
+    <div class="userinfo" id="userinfo"></div>
+  </div>
+  <div class="venta-wrap">
+    <div class="productos-panel">
+      <h2>Productos</h2>
+      <input id="buscar" placeholder="Buscar producto..." oninput="pintarProductos()">
+      <div style="display:flex; gap:6px; margin-top:8px;">
+        <button type="button" class="vista-btn small" data-vista="fotos" onclick="elegirVista(this)">🖼️ Con fotos</button>
+        <button type="button" class="vista-btn small active" data-vista="compacta" onclick="elegirVista(this)">▦ Compacta</button>
+        <button type="button" class="vista-btn small" data-vista="sinfoto" onclick="elegirVista(this)">📃 Solo texto (más denso)</button>
+      </div>
+      <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+        <button type="button" class="orden-btn small active" data-orden="categoria" onclick="elegirOrden(this)">📂 Por categoría</button>
+        <button type="button" class="orden-btn small" data-orden="todos" onclick="elegirOrden(this)">🔀 Todos juntos</button>
+        <button type="button" class="orden-btn small" data-orden="alfabetico" onclick="elegirOrden(this)">🔤 Alfabético</button>
+        <button type="button" class="orden-btn small" data-orden="precio" onclick="elegirOrden(this)">💲 Por precio</button>
+        <button type="button" class="orden-btn small" data-orden="masvendidos" onclick="elegirOrden(this)">🔥 Más vendidos hoy</button>
+      </div>
+      <div class="grid compacta" id="grid" style="margin-top:10px;"></div>
+    </div>
+    <div class="carrito-panel">
+      <h2>Venta actual</h2>
+      <div class="carrito-scroll">
+        <table>
+          <thead><tr><th>Item</th><th>Cant.</th><th>Subt.</th><th></th></tr></thead>
+          <tbody id="carrito"></tbody>
+        </table>
+      </div>
+      <div class="carrito-fijo">
+        <div class="total-box" id="total">Total: $0</div>
+
+        <label>Método de pago</label>
+        <div id="metodos" style="display:flex; gap:8px; margin-bottom:10px;">
+          <button type="button" class="metodo-btn active" data-metodo="Efectivo" onclick="elegirMetodo(this)">💵 Efectivo</button>
+          <button type="button" class="metodo-btn" data-metodo="Tarjeta" onclick="elegirMetodo(this)">💳 Tarjeta</button>
+          <button type="button" class="metodo-btn" data-metodo="Transferencia" onclick="elegirMetodo(this)">📱 Transferencia</button>
+        </div>
+
+        <button type="button" class="llevar-btn" id="btnLlevar" onclick="toggleLlevar()" style="width:100%;">🛍️ Para llevar (descuenta empaque/bolsa)</button>
+        <br><br>
+
+        <button style="width:100%;" onclick="cobrar()">✅ Cobrar</button>
+        <br><br>
+        <button style="width:100%;" class="secondary" id="btnImprimir" onclick="reimprimir()" disabled>🖨️ Imprimir comprobante</button>
+        <div id="msg" class="error"></div>
+        <div id="ok" class="ok"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/comun.js"></script>
+  <script>
+    let productos = [];
+    let ventasHoyPorId = {};
+    let carrito = []; // {product_id, nombre, precio, cantidad}
+    let metodoPago = 'Efectivo';
+    let llevar = false;
+    let ultimaVenta = null;
+
+    async function cargarProductos() {
+      const [prods, diario] = await Promise.all([
+        api('/api/products'),
+        api('/api/reports/diario').catch(() => ({ cantidad_por_producto_id: {} }))
+      ]);
+      productos = prods;
+      ventasHoyPorId = diario.cantidad_por_producto_id || {};
+      pintarProductos();
+    }
+
+    function elegirMetodo(btn) {
+      document.querySelectorAll('.metodo-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      metodoPago = btn.dataset.metodo;
+    }
+
+    function toggleLlevar() {
+      llevar = !llevar;
+      document.getElementById('btnLlevar').classList.toggle('active', llevar);
+    }
+
+    let vistaActual = localStorage.getItem('ventasVista') || 'compacta';
+    let ordenActual = localStorage.getItem('ventasOrden') || 'categoria';
+
+    function elegirVista(btn) {
+      vistaActual = btn.dataset.vista;
+      localStorage.setItem('ventasVista', vistaActual);
+      document.querySelectorAll('.vista-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      pintarProductos();
+    }
+
+    function elegirOrden(btn) {
+      ordenActual = btn.dataset.orden;
+      localStorage.setItem('ventasOrden', ordenActual);
+      document.querySelectorAll('.orden-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      pintarProductos();
+    }
+
+    function tarjetaHtml(p) {
+      return `
+        <div class="prod-card ${vistaActual}" onclick="agregar(${p.id})">
+          ${p.foto ? `<img src="${p.foto}">` : `<div class="noimg">Sin foto</div>`}
+          <div class="nombre">${p.nombre}
+            ${p.tiene_combo ? '<span class="badge" style="background:#d6eaf8;">combo</span>' : ''}
+            ${p.promo_activa ? '<span class="badge" style="background:#fadbd8;">🏷️ promo</span>' : ''}
+          </div>
+          <div class="precio">
+            ${p.promo_activa ? `<span style="text-decoration:line-through;color:#999;font-size:11px;">${moneda(p.precio_venta)}</span> ${moneda(p.precio_actual)}` : moneda(p.precio_actual)}
+          </div>
+          <div class="stock-txt" style="font-size:11px;color:#999;">Stock: ${p.stock}</div>
+        </div>`;
+    }
+
+    function pintarProductos() {
+      const q = document.getElementById('buscar').value.toLowerCase();
+      const grid = document.getElementById('grid');
+      grid.className = 'grid ' + vistaActual;
+      let filtrados = productos.filter(p => p.nombre.toLowerCase().includes(q));
+
+      if (!filtrados.length) {
+        grid.innerHTML = '<p style="color:#999;">No hay productos. Ve a la sección Productos para crearlos.</p>';
+        return;
+      }
+
+      if (ordenActual === 'categoria') {
+        // Agrupados por categoria, y alfabetico dentro de cada categoria
+        const porCategoria = {};
+        filtrados.forEach(p => {
+          const cat = p.categoria || 'General';
+          if (!porCategoria[cat]) porCategoria[cat] = [];
+          porCategoria[cat].push(p);
+        });
+        const categorias = Object.keys(porCategoria).sort();
+        categorias.forEach(cat => porCategoria[cat].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+        grid.innerHTML = categorias.map(cat => `
+          <h3 class="cat-header ${vistaActual}">${cat}</h3>
+          ${porCategoria[cat].map(tarjetaHtml).join('')}
+        `).join('');
+        return;
+      }
+
+      // Los demas modos muestran todo junto, sin encabezados de categoria
+      if (ordenActual === 'alfabetico') {
+        filtrados.sort((a, b) => a.nombre.localeCompare(b.nombre));
+      } else if (ordenActual === 'precio') {
+        filtrados.sort((a, b) => a.precio_actual - b.precio_actual);
+      } else if (ordenActual === 'masvendidos') {
+        filtrados.sort((a, b) => (ventasHoyPorId[b.id] || 0) - (ventasHoyPorId[a.id] || 0) || a.nombre.localeCompare(b.nombre));
+      }
+      // 'todos' se deja en el orden en que vienen (orden de creacion)
+
+      grid.innerHTML = filtrados.map(tarjetaHtml).join('');
+    }
+
+    function agregar(id) {
+      const p = productos.find(p => p.id === id);
+      if (!p) return;
+      const existente = carrito.find(c => c.product_id === id);
+      if (existente) existente.cantidad += 1;
+      else carrito.push({ product_id: id, nombre: p.nombre + (p.promo_activa ? ' 🏷️' : ''), precio: p.precio_actual, cantidad: 1 });
+      pintarCarrito();
+    }
+
+    function cambiarCantidad(id, delta) {
+      const it = carrito.find(c => c.product_id === id);
+      it.cantidad += delta;
+      if (it.cantidad <= 0) carrito = carrito.filter(c => c.product_id !== id);
+      pintarCarrito();
+    }
+
+    function pintarCarrito() {
+      const tbody = document.getElementById('carrito');
+      tbody.innerHTML = carrito.map(c => `
+        <tr>
+          <td>${c.nombre}</td>
+          <td>
+            <button class="small secondary" onclick="cambiarCantidad(${c.product_id},-1)">-</button>
+            ${c.cantidad}
+            <button class="small secondary" onclick="cambiarCantidad(${c.product_id},1)">+</button>
+          </td>
+          <td>${moneda(c.precio * c.cantidad)}</td>
+          <td></td>
+        </tr>`).join('');
+      const total = carrito.reduce((s, c) => s + c.precio * c.cantidad, 0);
+      document.getElementById('total').textContent = 'Total: ' + moneda(total);
+    }
+
+    async function cobrar() {
+      document.getElementById('msg').textContent = '';
+      document.getElementById('ok').textContent = '';
+      if (!carrito.length) { document.getElementById('msg').textContent = 'Agrega al menos un producto.'; return; }
+      try {
+        const body = {
+          items: carrito.map(c => ({ product_id: c.product_id, cantidad: c.cantidad })),
+          metodo_pago: metodoPago,
+          llevar
+        };
+        const { sale } = await api('/api/sales', { method: 'POST', body: JSON.stringify(body) });
+        ultimaVenta = sale;
+        document.getElementById('btnImprimir').disabled = false;
+        document.getElementById('ok').textContent = `Venta #${sale.id} registrada por ${moneda(sale.total)}. Pulsa "Imprimir comprobante" si necesitas el ticket.`;
+        carrito = [];
+        pintarCarrito();
+        toggleLlevar_reset();
+        cargarProductos();
+      } catch (e) {
+        document.getElementById('msg').textContent = e.message;
+      }
+    }
+
+    function toggleLlevar_reset() {
+      llevar = false;
+      document.getElementById('btnLlevar').classList.remove('active');
+    }
+
+    function reimprimir() {
+      if (ultimaVenta) imprimirComprobante(ultimaVenta);
+    }
+
+    function imprimirComprobante(venta) {
+      const w = window.open('', '_blank', 'width=380,height=600');
+      const fecha = new Date(venta.fecha).toLocaleString('es-CO');
+      const filas = venta.items.map(it => `
+        <tr>
+          <td>${it.nombre_producto}</td>
+          <td style="text-align:center;">${it.cantidad}</td>
+          <td style="text-align:right;">${moneda(it.subtotal)}</td>
+        </tr>`).join('');
+      w.document.write(`
+        <html><head><title>Comprobante #${venta.id}</title>
+        <style>
+          body { font-family: monospace; width: 280px; margin: 0 auto; font-size: 13px; }
+          h2 { text-align: center; margin: 6px 0; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+          td { padding: 2px 0; }
+          hr { border: none; border-top: 1px dashed #333; }
+          .total { font-weight: bold; font-size: 16px; text-align: right; margin-top: 6px; }
+          .center { text-align: center; }
+        </style>
+        </head><body>
+          <h2>🍔 Comidas Rápidas</h2>
+          <div class="center">Comprobante de venta #${venta.id}</div>
+          <div class="center">${fecha}</div>
+          <div>Atendió: ${venta.usuario_nombre}</div>
+          ${venta.llevar ? '<div class="center"><b>PARA LLEVAR</b></div>' : ''}
+          <hr>
+          <table>
+            <tr><td><b>Producto</b></td><td class="center"><b>Cant</b></td><td style="text-align:right;"><b>Subt.</b></td></tr>
+            ${filas}
+          </table>
+          <hr>
+          <div class="total">TOTAL: ${moneda(venta.total)}</div>
+          <div>Pago: ${venta.metodo_pago}</div>
+          <hr>
+          <div class="center">¡Gracias por su compra!</div>
+        </body></html>
+      `);
+      w.document.close();
+      w.focus();
+      setTimeout(() => w.print(), 300);
+    }
+
+    (async () => {
+      const user = await protegerPagina('ventas.html', ['admin', 'vendedor']);
+      if (!user) return;
+      document.querySelectorAll('.vista-btn').forEach(b => b.classList.toggle('active', b.dataset.vista === vistaActual));
+      document.querySelectorAll('.orden-btn').forEach(b => b.classList.toggle('active', b.dataset.orden === ordenActual));
+      cargarProductos();
+    })();
+  </script>
+</body>
+</html>
