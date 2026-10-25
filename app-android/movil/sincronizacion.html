@@ -167,16 +167,69 @@
       catch (e) { msg('msgRespaldo', 'No se pudo guardar la copia: ' + e.message); }
     }
 
+    // ---- Lectura tolerante del archivo a importar ----
+    // Acepta: db.json normal, guardado con BOM o en "Unicode" (UTF-16) por el
+    // Bloc de notas, y un .zip que contenga el db.json.
+    function decodificar(bytes) {
+      if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) return new TextDecoder('utf-8').decode(bytes.subarray(3));
+      if (bytes[0] === 0xFF && bytes[1] === 0xFE) return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+      if (bytes[0] === 0xFE && bytes[1] === 0xFF) return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+      if (bytes.length > 1 && bytes[1] === 0 && bytes[0] !== 0) return new TextDecoder('utf-16le').decode(bytes);
+      return new TextDecoder('utf-8').decode(bytes);
+    }
+    async function leerZip(bytes) {
+      const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      let fin = -1;
+      for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+        if (dv.getUint32(i, true) === 0x06054b50) { fin = i; break; }
+      }
+      if (fin < 0) throw new Error('El archivo parece un ZIP dañado.');
+      const total = dv.getUint16(fin + 10, true);
+      let p = dv.getUint32(fin + 16, true);
+      const entradas = [];
+      for (let k = 0; k < total; k++) {
+        if (dv.getUint32(p, true) !== 0x02014b50) break;
+        const metodo = dv.getUint16(p + 10, true), tamComp = dv.getUint32(p + 20, true);
+        const largoNombre = dv.getUint16(p + 28, true), largoExtra = dv.getUint16(p + 30, true), largoCom = dv.getUint16(p + 32, true);
+        const local = dv.getUint32(p + 42, true);
+        const nombre = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + largoNombre));
+        entradas.push({ nombre, metodo, tamComp, local });
+        p += 46 + largoNombre + largoExtra + largoCom;
+      }
+      const e = entradas.find(x => /(^|\/)db\.json$/i.test(x.nombre)) || entradas.find(x => /\.json$/i.test(x.nombre));
+      if (!e) throw new Error('El ZIP no contiene ningún archivo .json (se esperaba db.json).');
+      const ini = e.local + 30 + dv.getUint16(e.local + 26, true) + dv.getUint16(e.local + 28, true);
+      const datos = bytes.subarray(ini, ini + e.tamComp);
+      if (e.metodo === 0) return datos;
+      if (e.metodo !== 8 || typeof DecompressionStream === 'undefined') throw new Error('No se pudo descomprimir el ZIP en este teléfono. Descomprímelo y elige el db.json.');
+      const flujo = new Blob([datos]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return new Uint8Array(await new Response(flujo).arrayBuffer());
+    }
+    async function leerArchivoImportar(f) {
+      let bytes = new Uint8Array(await f.arrayBuffer());
+      if (!bytes.length) throw new Error('El archivo "' + f.name + '" está vacío (0 bytes). Vuelve a copiarlo desde el PC.');
+      if (bytes[0] === 0x50 && bytes[1] === 0x4B) bytes = await leerZip(bytes);
+      let texto = decodificar(bytes).replace(/^﻿/, '').trim();
+      try { JSON.parse(texto); return texto; } catch (e) {
+        const muestra = texto.slice(0, 60).replace(/[^\x20-\x7EÀ-ſ]/g, '·');
+        let pista = '';
+        if (/^<(!doctype|html)/i.test(texto)) pista = ' Es una página web, no el archivo (suele pasar al bajarlo desde Drive o un enlace). Descárgalo de nuevo con la opción "Descargar".';
+        else if (!texto.startsWith('{')) pista = ' Un db.json válido empieza con el carácter {.';
+        throw new Error(`Ese archivo no es una base de datos del sistema. Archivo: "${f.name}" (${(f.size / 1024).toFixed(1)} KB). Empieza con: ${muestra}…${pista}`);
+      }
+    }
+
     async function importar(input) {
       const f = input.files[0];
       input.value = '';
       if (!f) return;
       if (!confirm('Esto REEMPLAZA todos los datos de este teléfono por los del archivo "' + f.name + '". ¿Continuar?')) return;
       try {
-        await POSSync.importarArchivo(await f.text());
+        const texto = await leerArchivoImportar(f);
+        await POSSync.importarArchivo(texto);
         alert('Datos importados. Inicia sesión con los usuarios del PC.');
         location.href = 'login.html';
-      } catch (e) { msg('msgRespaldo', e.message); }
+      } catch (e) { msg('msgRespaldo', esc(e.message)); }
     }
 
     window.addEventListener('pos-sync-estado', refrescar);
